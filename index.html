@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แจ้งปัญหา</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Prompt:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2F5F7;--surface:#fff;--ink:#14212B;--muted:#586873;--line:#D9E0E5;--accent:#0E6E8C;--accent-ink:#fff;--bad:#B63A27;--ok:#1B8559;--ok-bg:#E1F2E9;
+--display:'Prompt','IBM Plex Sans Thai',system-ui,sans-serif;--body:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0E161B;--surface:#162128;--ink:#E6EDF1;--muted:#93A5B0;--line:#26353E;--accent:#52B6D6;--accent-ink:#0B1A21;--bad:#F08A78;--ok:#5CCB98;--ok-bg:#15332A;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body);padding:24px max(16px,env(safe-area-inset-left,0px)) 48px}
+main{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font:600 1.6rem/1.25 var(--display);margin:0;text-wrap:balance}
+p{margin:0}.lead{color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+label,.lbl{font-weight:500;font-size:.92rem}
+.opt{color:var(--muted);font-weight:400}
+input,textarea,button{font:inherit;color:inherit}
+input[type=text],textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:120px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 16px;cursor:pointer;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.55;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.hint{color:var(--muted);font-size:.85rem}
+.err{color:var(--bad);font-size:.92rem}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumb{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb button{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
+.done{background:var(--ok-bg);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px}
+.ticket{font:600 1.8rem/1.2 var(--display);letter-spacing:.06em;user-select:all}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+ul.tl{list-style:none;margin:0;padding:0}
+ul.tl li{padding:0 0 12px 18px;border-left:2px solid var(--line);margin-left:5px;position:relative;font-size:.92rem}
+ul.tl li::before{content:'';position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <h1>แจ้งปัญหา</h1>
+    <p class="lead">บอกเราว่าเกิดอะไรขึ้นและอยู่ตรงไหน แนบรูปได้ เมื่อส่งแล้วจะได้รหัสเรื่องไว้ติดตามสถานะ</p>
+  </header>
+
+  <form id="form" class="card" novalidate>
+    <div class="field" id="codeField" hidden><label for="code">รหัสทีม</label><input type="text" id="code" autocomplete="off"></div>
+    <div class="field"><label for="title">เรื่องที่แจ้ง</label><input type="text" id="title" maxlength="120" placeholder="เช่น หลอดไฟทางเดินชั้น 2 ดับ"></div>
+    <div class="field"><label for="details">รายละเอียด</label><textarea id="details" maxlength="2000" placeholder="เกิดขึ้นเมื่อไหร่ ส่งผลอะไร จุดที่เห็นชัดที่สุดคือตรงไหน"></textarea></div>
+    <div class="field"><span class="lbl">รูปภาพ <span class="opt">(ไม่เกิน 3 รูป)</span></span>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="row"><button class="btn" type="button" id="pick">เลือกรูป</button><span class="hint" id="imgNote">ระบบย่อรูปให้อัตโนมัติ</span></div>
+      <input type="file" id="files" accept="image/*" multiple hidden>
+    </div>
+    <div class="field"><span class="lbl">ตำแหน่ง <span class="opt">(ไม่บังคับ)</span></span>
+      <div class="row"><button class="btn" type="button" id="gps">ใช้ตำแหน่งปัจจุบัน</button><span class="hint" id="locNote"></span></div>
+      <div class="row"><input type="text" id="lat" inputmode="decimal" placeholder="ละติจูด" style="flex:1 1 140px"><input type="text" id="lng" inputmode="decimal" placeholder="ลองจิจูด" style="flex:1 1 140px"></div>
+    </div>
+    <div class="field"><label for="reporter">ชื่อผู้แจ้ง <span class="opt">(ไม่บังคับ)</span></label><input type="text" id="reporter" maxlength="80" autocomplete="name"></div>
+    <div class="field"><label for="contact">ช่องทางติดต่อกลับ <span class="opt">(เบอร์โทรหรือ LINE ไม่บังคับ)</span></label><input type="text" id="contact" maxlength="80"></div>
+    <div class="hp" aria-hidden="true"><label for="website">เว็บไซต์</label><input type="text" id="website" tabindex="-1" autocomplete="off"></div>
+    <p class="err" id="err" role="alert" hidden></p>
+    <button class="btn primary" type="submit" id="send">ส่งเรื่อง</button>
+  </form>
+
+  <section class="done" id="done" hidden aria-live="polite">
+    <p>ส่งเรื่องเรียบร้อย รหัสเรื่องของคุณคือ</p>
+    <p class="ticket" id="ticket"></p>
+    <p class="hint">จดรหัสนี้ไว้เพื่อติดตามสถานะ</p>
+    <div class="row"><button class="btn" type="button" id="copy">คัดลอกรหัส</button><button class="btn" type="button" id="again">แจ้งเรื่องใหม่</button></div>
+  </section>
+
+  <section class="card" aria-labelledby="trk">
+    <h2 id="trk" style="font:600 1.1rem var(--display);margin:0">ติดตามสถานะ</h2>
+    <form id="trackForm" class="row" novalidate><input type="text" id="tid" placeholder="รหัสเรื่อง เช่น R7K2M9Q" style="flex:1 1 200px;width:auto" autocomplete="off"><button class="btn" type="submit" id="tgo">ตรวจสอบ</button></form>
+    <p class="err" id="terr" hidden></p>
+    <div id="tres" hidden><p id="ttitle" style="font-weight:500"></p><p class="hint" id="tstatus" style="margin-bottom:10px"></p><ul class="tl" id="tl"></ul></div>
+  </section>
+</main>
+
+<script>
+/* ===== Config: edit these two lines after deploying the Apps Script ===== */
+var API = 'https://script.google.com/macros/s/AKfycby4begLhepsjGOOdCxJ-J5DUfO7QPUDXlRhK5wu0HtidfZf-q85sfMo66-JU0QTB6OSgw/exec';   // the Web app URL ending in /exec
+var NEEDS_TEAM_CODE = false;          // set true if you set TEAM_CODE in Apps Script
+/* ======================================================================== */
+var MAX_IMG = 3, imgs = [];
+function $(s){ return document.querySelector(s); }
+function show(el, msg){ el.textContent = msg; el.hidden = !msg; }
+$('#codeField').hidden = !NEEDS_TEAM_CODE;
+
+async function shrink(file){
+  var bmp = await createImageBitmap(file), s = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  var c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  var url = c.toDataURL('image/jpeg', 0.8);
+  return {url:url, data:url.split(',')[1]};
+}
+function drawThumbs(){
+  var box = $('#thumbs'); box.replaceChildren();
+  imgs.forEach(function(im, i){
+    var t = document.createElement('span'); t.className = 'thumb';
+    var img = document.createElement('img'); img.src = im.url; img.alt = 'รูปที่แนบ ' + (i + 1);
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = '×'; b.setAttribute('aria-label', 'เอารูปนี้ออก');
+    b.onclick = function(){ imgs.splice(i, 1); drawThumbs(); };
+    t.append(img, b); box.append(t);
+  });
+  $('#pick').disabled = imgs.length >= MAX_IMG;
+}
+$('#pick').onclick = function(){ $('#files').click(); };
+$('#files').onchange = async function(){
+  var picked = Array.from(this.files).slice(0, MAX_IMG - imgs.length); this.value = '';
+  $('#imgNote').textContent = 'กำลังเตรียมรูป…';
+  for (var i = 0; i < picked.length; i++){
+    try { imgs.push(await shrink(picked[i])); } catch(e) { show($('#err'), 'เปิดรูปบางไฟล์ไม่ได้ ลองใช้ไฟล์ JPG หรือ PNG'); }
+  }
+  $('#imgNote').textContent = 'ระบบย่อรูปให้อัตโนมัติ'; drawThumbs();
+};
+$('#gps').onclick = function(){
+  var n = $('#locNote');
+  if (!navigator.geolocation){ n.textContent = 'เบราว์เซอร์นี้หาตำแหน่งไม่ได้ พิมพ์พิกัดเองได้'; return; }
+  n.textContent = 'กำลังหาตำแหน่ง…';
+  navigator.geolocation.getCurrentPosition(function(p){
+    $('#lat').value = p.coords.latitude.toFixed(6); $('#lng').value = p.coords.longitude.toFixed(6); n.textContent = 'ได้ตำแหน่งแล้ว';
+  }, function(){ n.textContent = 'หาตำแหน่งไม่ได้ พิมพ์พิกัดเองได้'; }, {enableHighAccuracy:true, timeout:10000});
+};
+function validLoc(la, lo){ var a = Number(la.replace(',', '.')), b = Number(lo.replace(',', '.')); return la && lo && isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180; }
+
+$('#form').addEventListener('submit', async function(e){
+  e.preventDefault(); var err = $('#err'); show(err, '');
+  var title = $('#title').value.trim(), details = $('#details').value.trim(), la = $('#lat').value.trim(), lo = $('#lng').value.trim();
+  if (API.indexOf('PASTE_') === 0){ show(err, 'ยังไม่ได้ตั้งค่าที่อยู่ของระบบหลังบ้าน'); return; }
+  if (!title){ show(err, 'กรอกเรื่องที่แจ้ง'); $('#title').focus(); return; }
+  if (!details){ show(err, 'กรอกรายละเอียด'); $('#details').focus(); return; }
+  if ((la || lo) && !validLoc(la, lo)){ show(err, 'พิกัดไม่ถูกต้อง เว้นว่างทั้งสองช่องหรือใส่ให้ครบ'); return; }
+  var btn = $('#send'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  try {
+    var res = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({
+      code:$('#code').value, title:title, details:details, reporter:$('#reporter').value, contact:$('#contact').value, website:$('#website').value,
+      lat:la ? la.replace(',', '.') : '', lng:lo ? lo.replace(',', '.') : '', images:imgs.map(function(i){ return {data:i.data}; })})});
+    var r = await res.json();
+    if (!r.ok) throw new Error(r.error);
+    $('#ticket').textContent = r.id; $('#form').hidden = true; $('#done').hidden = false; $('#done').scrollIntoView({block:'nearest'});
+  } catch(x) {
+    show(err, x && x.message === 'code' ? 'รหัสทีมไม่ถูกต้อง' : 'ส่งไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง');
+  }
+  btn.disabled = false; btn.textContent = 'ส่งเรื่อง';
+});
+$('#again').onclick = function(){ ['title','details','lat','lng','reporter','contact'].forEach(function(k){ $('#' + k).value = ''; }); imgs = []; drawThumbs(); $('#locNote').textContent = ''; $('#done').hidden = true; $('#form').hidden = false; $('#title').focus(); };
+$('#copy').onclick = function(){ var t = $('#ticket').textContent; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ $('#copy').textContent = 'คัดลอกแล้ว'; }, function(){ var r = document.createRange(); r.selectNodeContents($('#ticket')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }); };
+
+var STATUS_NOTE = {'รับเรื่อง':'ได้รับเรื่องแล้ว รอมอบหมายผู้รับผิดชอบ'};
+$('#trackForm').addEventListener('submit', async function(e){
+  e.preventDefault(); show($('#terr'), ''); $('#tres').hidden = true;
+  var id = $('#tid').value.trim().toUpperCase();
+  if (!id){ show($('#terr'), 'ใส่รหัสเรื่อง'); return; }
+  if (API.indexOf('PASTE_') === 0){ show($('#terr'), 'ยังไม่ได้ตั้งค่าที่อยู่ของระบบหลังบ้าน'); return; }
+  $('#tgo').disabled = true;
+  try {
+    var r = await (await fetch(API + '?id=' + encodeURIComponent(id))).json();
+    if (!r.ok) throw new Error(r.error);
+    $('#ttitle').textContent = r.title; $('#tstatus').textContent = 'สถานะ: ' + r.status + (STATUS_NOTE[r.status] ? ' · ' + STATUS_NOTE[r.status] : '');
+    var tl = $('#tl'); tl.replaceChildren();
+    r.history.slice().reverse().forEach(function(h){
+      var li = document.createElement('li'); var b = document.createElement('b'); b.textContent = h.status;
+      var d = document.createElement('div'); d.className = 'hint'; d.textContent = new Date(h.at).toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'});
+      li.append(b, d); tl.append(li);
+    });
+    $('#tres').hidden = false;
+  } catch(x) { show($('#terr'), x && x.message === 'notfound' ? 'ไม่พบรหัสเรื่องนี้ ตรวจรหัสอีกครั้ง' : 'ตรวจสอบไม่สำเร็จ ลองอีกครั้ง'); }
+  $('#tgo').disabled = false;
+});
+drawThumbs();
+</script>
+</body>
+</html>
