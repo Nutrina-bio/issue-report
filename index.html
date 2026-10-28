@@ -3,179 +3,397 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>แจ้งปัญหา</title>
+<title>รายงานสถานะโปรเจกต์</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Prompt:wght@500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F2F5F7;--surface:#fff;--ink:#14212B;--muted:#586873;--line:#D9E0E5;--accent:#0E6E8C;--accent-ink:#fff;--bad:#B63A27;--ok:#1B8559;--ok-bg:#E1F2E9;
+:root{--bg:#F2F5F7;--surface:#fff;--ink:#14212B;--muted:#586873;--line:#D9E0E5;--accent:#0E6E8C;--accent-ink:#fff;
+--late:#B63A27;--late-bg:#FBE6E2;--risk:#8A5A00;--risk-bg:#FFF0CC;--prog:#0E6E8C;--prog-bg:#DFF0F6;--done:#1B8559;--done-bg:#E1F2E9;
 --display:'Prompt','IBM Plex Sans Thai',system-ui,sans-serif;--body:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0E161B;--surface:#162128;--ink:#E6EDF1;--muted:#93A5B0;--line:#26353E;--accent:#52B6D6;--accent-ink:#0B1A21;--bad:#F08A78;--ok:#5CCB98;--ok-bg:#15332A;color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root{--bg:#0E161B;--surface:#162128;--ink:#E6EDF1;--muted:#93A5B0;--line:#26353E;--accent:#52B6D6;--accent-ink:#0B1A21;
+--late:#F08A78;--late-bg:#3A1C17;--risk:#F0C25C;--risk-bg:#38290A;--prog:#52B6D6;--prog-bg:#10303B;--done:#5CCB98;--done-bg:#15332A;color-scheme:dark}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body);padding:24px max(16px,env(safe-area-inset-left,0px)) 48px}
-main{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
-h1{font:600 1.6rem/1.25 var(--display);margin:0;text-wrap:balance}
-p{margin:0}.lead{color:var(--muted)}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body)}
+.wrap{max-width:1040px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left,0px)) 56px;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:1.5rem;line-height:1.25}h2{font-size:1.15rem}h3{font-size:1rem}
+p{margin:0}.muted{color:var(--muted)}.small{font-size:.85rem}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
 label,.lbl{font-weight:500;font-size:.92rem}
-.opt{color:var(--muted);font-weight:400}
-input,textarea,button{font:inherit;color:inherit}
-input[type=text],textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-textarea{min-height:120px;resize:vertical}
-input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 16px;cursor:pointer;font-weight:500}
+input,textarea,select,button{font:inherit;color:inherit}
+input[type=text],input[type=password],input[type=number],textarea,select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:96px;resize:vertical}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;cursor:pointer;font-weight:500}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--late)}
+.btn.sm{padding:5px 10px;font-size:.85rem}
 .btn:disabled{opacity:.55;cursor:default}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.hint{color:var(--muted);font-size:.85rem}
-.err{color:var(--bad);font-size:.92rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:var(--late);font-size:.92rem}
+.login{max-width:380px;margin:12vh auto 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border:1px solid transparent;cursor:pointer;text-align:left;background:var(--surface);border-color:var(--line)}
+.tile b{font:600 1.7rem/1.1 var(--display)}
+.tile.on{outline:2px solid var(--accent)}
+.late{color:var(--late);background:var(--late-bg)}.risk{color:var(--risk);background:var(--risk-bg)}.prog{color:var(--prog);background:var(--prog-bg)}.done{color:var(--done);background:var(--done-bg)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 14px;cursor:pointer;white-space:nowrap;font-size:.9rem}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.8rem;font-weight:500}
+.meter{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent)}
 .thumbs{display:flex;flex-wrap:wrap;gap:8px}
-.thumb{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.thumb{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg);cursor:pointer}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb button{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
-.done{background:var(--ok-bg);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px}
-.ticket{font:600 1.8rem/1.2 var(--display);letter-spacing:.06em;user-select:all}
-.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.thumb .x{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
+.warn{color:var(--risk);font-size:.85rem}
+a{color:var(--accent)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px;width:min(560px,calc(100vw - 24px));max-height:90vh}
+dialog::backdrop{background:rgba(0,0,0,.45)}
 ul.tl{list-style:none;margin:0;padding:0}
 ul.tl li{padding:0 0 12px 18px;border-left:2px solid var(--line);margin-left:5px;position:relative;font-size:.92rem}
 ul.tl li::before{content:'';position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
+.radios{display:flex;flex-wrap:wrap;gap:8px}
+.radios label{border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:400}
+.radios input{margin-right:6px}
+table{border-collapse:collapse;width:100%}
+td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:middle}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:9}
 [hidden]{display:none!important}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<main>
-  <header style="display:flex;flex-direction:column;gap:6px">
-    <h1>แจ้งปัญหา</h1>
-    <p class="lead">บอกเราว่าเกิดอะไรขึ้นและอยู่ตรงไหน แนบรูปได้ เมื่อส่งแล้วจะได้รหัสเรื่องไว้ติดตามสถานะ</p>
-  </header>
-
-  <form id="form" class="card" novalidate>
-    <div class="field" id="codeField" hidden><label for="code">รหัสทีม</label><input type="text" id="code" autocomplete="off"></div>
-    <div class="field"><label for="title">เรื่องที่แจ้ง</label><input type="text" id="title" maxlength="120" placeholder="เช่น หลอดไฟทางเดินชั้น 2 ดับ"></div>
-    <div class="field"><label for="details">รายละเอียด</label><textarea id="details" maxlength="2000" placeholder="เกิดขึ้นเมื่อไหร่ ส่งผลอะไร จุดที่เห็นชัดที่สุดคือตรงไหน"></textarea></div>
-    <div class="field"><span class="lbl">รูปภาพ <span class="opt">(ไม่เกิน 3 รูป)</span></span>
-      <div class="thumbs" id="thumbs"></div>
-      <div class="row"><button class="btn" type="button" id="pick">เลือกรูป</button><span class="hint" id="imgNote">ระบบย่อรูปให้อัตโนมัติ</span></div>
-      <input type="file" id="files" accept="image/*" multiple hidden>
-    </div>
-    <div class="field"><span class="lbl">ตำแหน่ง <span class="opt">(ไม่บังคับ)</span></span>
-      <div class="row"><button class="btn" type="button" id="gps">ใช้ตำแหน่งปัจจุบัน</button><span class="hint" id="locNote"></span></div>
-      <div class="row"><input type="text" id="lat" inputmode="decimal" placeholder="ละติจูด" style="flex:1 1 140px"><input type="text" id="lng" inputmode="decimal" placeholder="ลองจิจูด" style="flex:1 1 140px"></div>
-    </div>
-    <div class="field"><label for="reporter">ชื่อผู้แจ้ง <span class="opt">(ไม่บังคับ)</span></label><input type="text" id="reporter" maxlength="80" autocomplete="name"></div>
-    <div class="field"><label for="contact">ช่องทางติดต่อกลับ <span class="opt">(เบอร์โทรหรือ LINE ไม่บังคับ)</span></label><input type="text" id="contact" maxlength="80"></div>
-    <div class="hp" aria-hidden="true"><label for="website">เว็บไซต์</label><input type="text" id="website" tabindex="-1" autocomplete="off"></div>
-    <p class="err" id="err" role="alert" hidden></p>
-    <button class="btn primary" type="submit" id="send">ส่งเรื่อง</button>
-  </form>
-
-  <section class="done" id="done" hidden aria-live="polite">
-    <p>ส่งเรื่องเรียบร้อย รหัสเรื่องของคุณคือ</p>
-    <p class="ticket" id="ticket"></p>
-    <p class="hint">จดรหัสนี้ไว้เพื่อติดตามสถานะ</p>
-    <div class="row"><button class="btn" type="button" id="copy">คัดลอกรหัส</button><button class="btn" type="button" id="again">แจ้งเรื่องใหม่</button></div>
-  </section>
-
-  <section class="card" aria-labelledby="trk">
-    <h2 id="trk" style="font:600 1.1rem var(--display);margin:0">ติดตามสถานะ</h2>
-    <form id="trackForm" class="row" novalidate><input type="text" id="tid" placeholder="รหัสเรื่อง เช่น R7K2M9Q" style="flex:1 1 200px;width:auto" autocomplete="off"><button class="btn" type="submit" id="tgo">ตรวจสอบ</button></form>
-    <p class="err" id="terr" hidden></p>
-    <div id="tres" hidden><p id="ttitle" style="font-weight:500"></p><p class="hint" id="tstatus" style="margin-bottom:10px"></p><ul class="tl" id="tl"></ul></div>
-  </section>
-</main>
-
+<div class="wrap" id="app"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<dialog id="dlg"></dialog>
 <script>
-/* ===== Config: edit these two lines after deploying the Apps Script ===== */
-var API = 'https://script.google.com/macros/s/AKfycby4begLhepsjGOOdCxJ-J5DUfO7QPUDXlRhK5wu0HtidfZf-q85sfMo66-JU0QTB6OSgw/exec';   // the Web app URL ending in /exec
-var NEEDS_TEAM_CODE = false;          // set true if you set TEAM_CODE in Apps Script
-/* ======================================================================== */
-var MAX_IMG = 3, imgs = [];
-function $(s){ return document.querySelector(s); }
-function show(el, msg){ el.textContent = msg; el.hidden = !msg; }
-$('#codeField').hidden = !NEEDS_TEAM_CODE;
+'use strict';
+var API = 'https://script.google.com/macros/s/AKfycby4begLhepsjGOOdCxJ-J5DUfO7QPUDXlRhK5wu0HtidfZf-q85sfMo66-JU0QTB6OSgw/exec';
+var ST = {
+  delayed:{label:'ล่าช้า',cls:'late'},
+  risk:{label:'มีความเสี่ยง',cls:'risk'},
+  inprogress:{label:'กำลังดำเนินการ',cls:'prog'},
+  done:{label:'เสร็จแล้ว',cls:'done'}
+};
+var ORDER = ['delayed','risk','inprogress','done'];
+var STALE_DAYS = 14, MAX_IMG = 4;
+var S = {token:null, name:null, role:null, projects:[], managers:[], people:[], filterStatus:'', filterMgr:'', busy:false};
+var imgCache = {}, imgQueue = [], imgActive = 0;
 
-async function shrink(file){
-  var bmp = await createImageBitmap(file), s = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
-  var c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  var url = c.toDataURL('image/jpeg', 0.8);
-  return {url:url, data:url.split(',')[1]};
-}
-function drawThumbs(){
-  var box = $('#thumbs'); box.replaceChildren();
-  imgs.forEach(function(im, i){
-    var t = document.createElement('span'); t.className = 'thumb';
-    var img = document.createElement('img'); img.src = im.url; img.alt = 'รูปที่แนบ ' + (i + 1);
-    var b = document.createElement('button'); b.type = 'button'; b.textContent = '×'; b.setAttribute('aria-label', 'เอารูปนี้ออก');
-    b.onclick = function(){ imgs.splice(i, 1); drawThumbs(); };
-    t.append(img, b); box.append(t);
+function $(s, r){ return (r || document).querySelector(s); }
+function h(tag, attrs){
+  var el = document.createElement(tag);
+  Object.keys(attrs || {}).forEach(function(k){
+    var v = attrs[k];
+    if(k === 'text') el.textContent = v;
+    else if(k === 'class') el.className = v;
+    else if(k.slice(0,2) === 'on') el.addEventListener(k.slice(2), v);
+    else if(v !== false && v != null) el.setAttribute(k, v);
   });
-  $('#pick').disabled = imgs.length >= MAX_IMG;
+  for(var i = 2; i < arguments.length; i++){
+    var c = arguments[i];
+    if(c == null || c === false) continue;
+    if(Array.isArray(c)) c.forEach(function(x){ if(x) el.appendChild(x); });
+    else el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return el;
 }
-$('#pick').onclick = function(){ $('#files').click(); };
-$('#files').onchange = async function(){
-  var picked = Array.from(this.files).slice(0, MAX_IMG - imgs.length); this.value = '';
-  $('#imgNote').textContent = 'กำลังเตรียมรูป…';
-  for (var i = 0; i < picked.length; i++){
-    try { imgs.push(await shrink(picked[i])); } catch(e) { show($('#err'), 'เปิดรูปบางไฟล์ไม่ได้ ลองใช้ไฟล์ JPG หรือ PNG'); }
-  }
-  $('#imgNote').textContent = 'ระบบย่อรูปให้อัตโนมัติ'; drawThumbs();
-};
-$('#gps').onclick = function(){
-  var n = $('#locNote');
-  if (!navigator.geolocation){ n.textContent = 'เบราว์เซอร์นี้หาตำแหน่งไม่ได้ พิมพ์พิกัดเองได้'; return; }
-  n.textContent = 'กำลังหาตำแหน่ง…';
-  navigator.geolocation.getCurrentPosition(function(p){
-    $('#lat').value = p.coords.latitude.toFixed(6); $('#lng').value = p.coords.longitude.toFixed(6); n.textContent = 'ได้ตำแหน่งแล้ว';
-  }, function(){ n.textContent = 'หาตำแหน่งไม่ได้ พิมพ์พิกัดเองได้'; }, {enableHighAccuracy:true, timeout:10000});
-};
-function validLoc(la, lo){ var a = Number(la.replace(',', '.')), b = Number(lo.replace(',', '.')); return la && lo && isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180; }
+function toast(msg){
+  var t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(function(){ t.hidden = true; }, 3200);
+}
+function fmt(iso){
+  if(!iso) return '-';
+  var d = new Date(iso); if(isNaN(d)) return '-';
+  return d.toLocaleString('th-TH', {day:'numeric', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function ageDays(iso){ var d = new Date(iso); return isNaN(d) ? 0 : Math.floor((Date.now() - d.getTime()) / 86400000); }
+function mapUrl(loc){ return 'https://www.google.com/maps?q=' + encodeURIComponent(loc.lat + ',' + loc.lng); }
+function keyOf(p){ return ST[p.status] ? p.status : 'inprogress'; }
 
-$('#form').addEventListener('submit', async function(e){
-  e.preventDefault(); var err = $('#err'); show(err, '');
-  var title = $('#title').value.trim(), details = $('#details').value.trim(), la = $('#lat').value.trim(), lo = $('#lng').value.trim();
-  if (API.indexOf('PASTE_') === 0){ show(err, 'ยังไม่ได้ตั้งค่าที่อยู่ของระบบหลังบ้าน'); return; }
-  if (!title){ show(err, 'กรอกเรื่องที่แจ้ง'); $('#title').focus(); return; }
-  if (!details){ show(err, 'กรอกรายละเอียด'); $('#details').focus(); return; }
-  if ((la || lo) && !validLoc(la, lo)){ show(err, 'พิกัดไม่ถูกต้อง เว้นว่างทั้งสองช่องหรือใส่ให้ครบ'); return; }
-  var btn = $('#send'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
-  try {
-    var res = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({
-      code:$('#code').value, title:title, details:details, reporter:$('#reporter').value, contact:$('#contact').value, website:$('#website').value,
-      lat:la ? la.replace(',', '.') : '', lng:lo ? lo.replace(',', '.') : '', images:imgs.map(function(i){ return {data:i.data}; })})});
-    var r = await res.json();
-    if (!r.ok) throw new Error(r.error);
-    $('#ticket').textContent = r.id; $('#form').hidden = true; $('#done').hidden = false; $('#done').scrollIntoView({block:'nearest'});
-  } catch(x) {
-    show(err, x && x.message === 'code' ? 'รหัสทีมไม่ถูกต้อง' : 'ส่งไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง');
-  }
-  btn.disabled = false; btn.textContent = 'ส่งเรื่อง';
-});
-$('#again').onclick = function(){ ['title','details','lat','lng','reporter','contact'].forEach(function(k){ $('#' + k).value = ''; }); imgs = []; drawThumbs(); $('#locNote').textContent = ''; $('#done').hidden = true; $('#form').hidden = false; $('#title').focus(); };
-$('#copy').onclick = function(){ var t = $('#ticket').textContent; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ $('#copy').textContent = 'คัดลอกแล้ว'; }, function(){ var r = document.createRange(); r.selectNodeContents($('#ticket')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }); };
+/* ---------- API ---------- */
+async function call(body){
+  if(S.token) body.token = S.token;
+  var res = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)});
+  var j = await res.json();
+  if(!j.ok && j.error === 'auth' && body.action !== 'login'){ logoutLocal(); toast('หมดเวลาการเข้าสู่ระบบ กรุณาเข้าใหม่'); }
+  return j;
+}
+function saveSession(){ try{ sessionStorage.setItem('ps-s', JSON.stringify({token:S.token, name:S.name, role:S.role})); }catch(e){} }
+function logoutLocal(){ S.token = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
 
-var STATUS_NOTE = {'รับเรื่อง':'ได้รับเรื่องแล้ว รอมอบหมายผู้รับผิดชอบ'};
-$('#trackForm').addEventListener('submit', async function(e){
-  e.preventDefault(); show($('#terr'), ''); $('#tres').hidden = true;
-  var id = $('#tid').value.trim().toUpperCase();
-  if (!id){ show($('#terr'), 'ใส่รหัสเรื่อง'); return; }
-  if (API.indexOf('PASTE_') === 0){ show($('#terr'), 'ยังไม่ได้ตั้งค่าที่อยู่ของระบบหลังบ้าน'); return; }
-  $('#tgo').disabled = true;
-  try {
-    var r = await (await fetch(API + '?id=' + encodeURIComponent(id))).json();
-    if (!r.ok) throw new Error(r.error);
-    $('#ttitle').textContent = r.title; $('#tstatus').textContent = 'สถานะ: ' + r.status + (STATUS_NOTE[r.status] ? ' · ' + STATUS_NOTE[r.status] : '');
-    var tl = $('#tl'); tl.replaceChildren();
-    r.history.slice().reverse().forEach(function(h){
-      var li = document.createElement('li'); var b = document.createElement('b'); b.textContent = h.status;
-      var d = document.createElement('div'); d.className = 'hint'; d.textContent = new Date(h.at).toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'});
-      li.append(b, d); tl.append(li);
-    });
-    $('#tres').hidden = false;
-  } catch(x) { show($('#terr'), x && x.message === 'notfound' ? 'ไม่พบรหัสเรื่องนี้ ตรวจรหัสอีกครั้ง' : 'ตรวจสอบไม่สำเร็จ ลองอีกครั้ง'); }
-  $('#tgo').disabled = false;
-});
-drawThumbs();
+/* ---------- images (served through the API, loaded a few at a time) ---------- */
+function loadImg(id, cb){
+  if(imgCache[id]){ cb(imgCache[id]); return; }
+  imgQueue.push({id:id, cb:cb}); pumpImgs();
+}
+function pumpImgs(){
+  while(imgActive < 3 && imgQueue.length){
+    var job = imgQueue.shift(); imgActive++;
+    (function(job){
+      call({action:'img', id:job.id}).then(function(j){ if(j.ok){ imgCache[job.id] = j.data; job.cb(j.data); } })
+        .catch(function(){}).then(function(){ imgActive--; pumpImgs(); });
+    })(job);
+  }
+}
+function thumbEl(id, removable, onRemove){
+  var img = h('img', {alt:'รูปโปรเจกต์', loading:'lazy'});
+  var box = h('div', {class:'thumb', onclick:function(){ if(img.src) showImage(img.src); }}, img);
+  loadImg(id, function(src){ img.src = src; });
+  if(removable) box.appendChild(h('button', {class:'x', type:'button', 'aria-label':'ลบรูป', text:'×', onclick:function(e){ e.stopPropagation(); onRemove(); }}));
+  return box;
+}
+function showImage(src){
+  var d = $('#dlg'); d.replaceChildren(h('img', {src:src, alt:'', style:'width:100%;border-radius:8px'}), h('div', {class:'row', style:'margin-top:12px'}, h('button', {class:'btn', text:'ปิด', onclick:function(){ d.close(); }})));
+  d.showModal();
+}
+function resize(file){
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onerror = reject;
+    r.onload = function(){
+      var im = new Image();
+      im.onerror = reject;
+      im.onload = function(){
+        var s = Math.min(1, 1280 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+        c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+      };
+      im.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+/* ---------- render ---------- */
+function render(){
+  var app = $('#app'); app.replaceChildren();
+  if(!S.token){ app.appendChild(loginView()); return; }
+  app.appendChild(h('div', {class:'bar'},
+    h('div', {}, h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted small', text:S.role === 'owner' ? 'เจ้าของบริษัท' : S.name + ' · ' + ({manager:'ผู้จัดการโปรเจกต์', admin:'ผู้ดูแลระบบ'}[S.role] || '')})),
+    h('div', {class:'row'},
+      S.role !== 'admin' ? h('button', {class:'btn', text:'รีเฟรช', onclick:refresh}) : null,
+      h('button', {class:'btn', text:'ออกจากระบบ', onclick:function(){ call({action:'logout'}).catch(function(){}); logoutLocal(); }}))));
+  if(S.role === 'admin') app.appendChild(adminView());
+  else if(S.role === 'owner') app.appendChild(ownerView());
+  else app.appendChild(managerView());
+}
+
+function loginView(){
+  var name = h('input', {type:'text', id:'ln', autocomplete:'username', placeholder:'ชื่อของคุณ'});
+  var pass = h('input', {type:'password', id:'lp', autocomplete:'current-password'});
+  var err = h('p', {class:'err', role:'alert'});
+  var btn = h('button', {class:'btn primary', type:'submit', text:'เข้าสู่ระบบ'});
+  var f = h('form', {class:'card login', onsubmit:async function(e){
+    e.preventDefault(); err.textContent = ''; btn.disabled = true;
+    try{
+      var j = await call({action:'login', name:name.value.trim(), pass:pass.value});
+      if(j.ok){ S.token = j.token; S.name = j.name; S.role = j.role; saveSession(); await refresh(); }
+      else err.textContent = j.error === 'locked' ? 'ใส่รหัสผิดหลายครั้ง ลองใหม่ใน 15 นาที' : 'ชื่อหรือรหัสไม่ถูกต้อง';
+    }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    btn.disabled = false;
+  }},
+    h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted', text:'เข้าสู่ระบบด้วยชื่อและรหัสของคุณ'}),
+    h('div', {class:'field'}, h('label', {for:'ln', text:'ชื่อ'}), name),
+    h('div', {class:'field'}, h('label', {for:'lp', text:'รหัส'}), pass), err, btn);
+  return f;
+}
+
+async function refresh(){
+  if(S.role === 'admin'){ var a = await call({action:'people'}); if(a.ok) S.people = a.people; render(); return; }
+  var j = await call({action:'list'});
+  if(j.ok){ S.projects = j.projects; S.managers = j.managers; }
+  else if(j.error !== 'auth') toast('โหลดข้อมูลไม่สำเร็จ');
+  render();
+}
+
+/* ---------- shared project card ---------- */
+function projectCard(p, mine){
+  var k = keyOf(p), stale = k !== 'done' && ageDays(p.updatedAt) > STALE_DAYS;
+  var card = h('div', {class:'card'},
+    h('div', {class:'row', style:'justify-content:space-between'}, h('h3', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
+    h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
+    h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '%' + (mine ? '' : ' · ' + p.manager)}),
+    p.details ? h('p', {text:p.details}) : null,
+    p.issue ? h('p', {class:'warn', text:'ปัญหา: ' + p.issue}) : null,
+    p.assignee ? h('p', {class:'small', text:'ผู้รับผิดชอบ: ' + p.assignee}) : null,
+    p.images && p.images.length ? h('div', {class:'thumbs'}, p.images.map(function(id){ return thumbEl(id, false); })) : null,
+    p.loc ? h('a', {href:mapUrl(p.loc), target:'_blank', rel:'noopener', class:'small', text:'ดูแผนที่' + (p.label ? ' · ' + p.label : '')}) : null,
+    h('p', {class:'small muted'}, 'อัปเดต ' + fmt(p.updatedAt), stale ? h('span', {class:'warn', text:' · ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}) : null),
+    h('div', {class:'row'},
+      h('button', {class:'btn sm', text:'ไทม์ไลน์', onclick:function(){ timeline(p); }}),
+      mine ? h('button', {class:'btn sm', text:'แก้ไข', onclick:function(){ projectForm(p); }}) : null));
+  return card;
+}
+function timeline(p){
+  var d = $('#dlg');
+  var items = (p.history || []).slice().sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
+  d.replaceChildren(h('h2', {text:p.name}), h('p', {class:'muted small', text:'ประวัติการเปลี่ยนสถานะ'}),
+    items.length ? h('ul', {class:'tl', style:'margin-top:12px'}, items.map(function(e){
+      var k = ST[e.status] ? e.status : 'inprogress';
+      return h('li', {}, h('b', {text:ST[k].label}), ' · ' + e.progress + '%', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}));
+    })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'}),
+    h('div', {class:'row'}, h('button', {class:'btn', text:'ปิด', onclick:function(){ d.close(); }})));
+  d.showModal();
+}
+
+/* ---------- manager ---------- */
+function managerView(){
+  var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
+  box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ของฉัน (' + S.projects.length + ')'}), h('button', {class:'btn primary', text:'+ เพิ่มโปรเจกต์', onclick:function(){ projectForm(null); }})));
+  if(!S.projects.length) box.appendChild(h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์ กด "เพิ่มโปรเจกต์" เพื่อเริ่มรายงาน'}));
+  var sorted = S.projects.slice().sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)); });
+  box.appendChild(h('div', {class:'cards'}, sorted.map(function(p){ return projectCard(p, true); })));
+  return box;
+}
+
+function projectForm(p){
+  var d = $('#dlg'), isNew = !p;
+  var cur = p || {name:'', status:'inprogress', progress:0, details:'', issue:'', assignee:'', images:[]};
+  var images = cur.images.slice(), loc = cur.loc ? {lat:cur.loc.lat, lng:cur.loc.lng} : null;
+  var name = h('input', {type:'text', id:'f-name', maxlength:120, value:cur.name});
+  var prog = h('input', {type:'range', id:'f-prog', min:0, max:100, step:5, value:cur.progress});
+  var progOut = h('span', {class:'small', text:cur.progress + '%'});
+  prog.addEventListener('input', function(){ progOut.textContent = prog.value + '%'; });
+  var details = h('textarea', {id:'f-det', maxlength:4000}); details.value = cur.details;
+  var issue = h('textarea', {id:'f-iss', maxlength:2000, style:'min-height:64px'}); issue.value = cur.issue;
+  var asg = h('select', {id:'f-asg'}, h('option', {value:'', text:'— ไม่ระบุ —'}), S.managers.map(function(n){ return h('option', {value:n, text:n}); }));
+  asg.value = cur.assignee;
+  var radios = h('div', {class:'radios', role:'radiogroup', 'aria-label':'สถานะ'}, ORDER.map(function(k){
+    var r = h('input', {type:'radio', name:'f-status', value:k}); r.checked = keyOf(cur) === k;
+    return h('label', {}, r, ST[k].label);
+  }));
+  var lat = h('input', {type:'text', inputmode:'decimal', placeholder:'ละติจูด', value:loc ? loc.lat : ''});
+  var lng = h('input', {type:'text', inputmode:'decimal', placeholder:'ลองจิจูด', value:loc ? loc.lng : ''});
+  var label = h('input', {type:'text', maxlength:120, placeholder:'ชื่อสถานที่ (ไม่บังคับ)', value:cur.label || ''});
+  var gps = h('button', {class:'btn sm', type:'button', text:'ใช้ตำแหน่งปัจจุบัน', onclick:function(){
+    if(!navigator.geolocation){ toast('เบราว์เซอร์นี้ไม่รองรับตำแหน่ง'); return; }
+    navigator.geolocation.getCurrentPosition(function(pos){ lat.value = pos.coords.latitude.toFixed(6); lng.value = pos.coords.longitude.toFixed(6); },
+      function(){ toast('ขอตำแหน่งไม่ได้ กรอกเองได้'); }, {enableHighAccuracy:true, timeout:10000});
+  }});
+  var thumbs = h('div', {class:'thumbs'});
+  function drawThumbs(){ thumbs.replaceChildren.apply(thumbs, images.map(function(id, i){ return thumbEl(id, true, function(){ images.splice(i, 1); drawThumbs(); }); })); }
+  drawThumbs();
+  var files = h('input', {type:'file', accept:'image/*', multiple:true, hidden:true});
+  var pick = h('button', {class:'btn sm', type:'button', text:'เลือกรูป', onclick:function(){ files.click(); }});
+  files.addEventListener('change', async function(){
+    var list = Array.prototype.slice.call(files.files); files.value = '';
+    for(var i = 0; i < list.length; i++){
+      if(images.length >= MAX_IMG){ toast('แนบรูปได้ไม่เกิน ' + MAX_IMG + ' รูป'); break; }
+      pick.disabled = true; pick.textContent = 'กำลังอัปโหลด...';
+      try{
+        var b64 = await resize(list[i]);
+        var j = await call({action:'upload', data:b64});
+        if(j.ok){ images.push(j.id); drawThumbs(); } else toast('อัปโหลดรูปไม่สำเร็จ');
+      }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
+    }
+    pick.disabled = false; pick.textContent = 'เลือกรูป';
+  });
+  var err = h('p', {class:'err', role:'alert'});
+  var save = h('button', {class:'btn primary', type:'submit', text:'บันทึก'});
+  var form = h('form', {style:'display:flex;flex-direction:column;gap:12px', onsubmit:async function(e){
+    e.preventDefault(); err.textContent = '';
+    var st = ($('input[name="f-status"]:checked', form) || {}).value;
+    if(!name.value.trim()){ err.textContent = 'กรอกชื่อโปรเจกต์'; return; }
+    var la = lat.value.trim() === '' ? null : Number(lat.value), lo = lng.value.trim() === '' ? null : Number(lng.value);
+    if((la === null) !== (lo === null) || (la !== null && (!isFinite(la) || !isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180))){ err.textContent = 'พิกัดไม่ถูกต้อง'; return; }
+    save.disabled = true;
+    try{
+      var j = await call({action:'save', project:{id:p ? p.id : '', name:name.value, status:st, progress:Number(prog.value), details:details.value, issue:issue.value, assignee:asg.value, images:images, loc:la === null ? null : {lat:la, lng:lo}, label:label.value}});
+      if(j.ok){ d.close(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = 'บันทึกไม่สำเร็จ ลองอีกครั้ง';
+    }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    save.disabled = false;
+  }},
+    h('h2', {text:isNew ? 'เพิ่มโปรเจกต์' : 'แก้ไขโปรเจกต์'}),
+    h('div', {class:'field'}, h('label', {for:'f-name', text:'ชื่อโปรเจกต์'}), name),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'สถานะ'}), radios),
+    h('div', {class:'field'}, h('label', {for:'f-prog', text:'ความคืบหน้า'}), h('div', {class:'row'}, prog, progOut)),
+    h('div', {class:'field'}, h('label', {for:'f-det', text:'รายละเอียด'}), details),
+    h('div', {class:'field'}, h('label', {for:'f-iss', text:'ปัญหา / ความเสี่ยง (ถ้ามี)'}), issue),
+    h('div', {class:'field'}, h('label', {for:'f-asg', text:'ผู้รับผิดชอบ'}), asg),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'รูปภาพ (ไม่เกิน ' + MAX_IMG + ' รูป)'}), thumbs, h('div', {class:'row'}, pick), files),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'พิกัดบนแผนที่ (ไม่บังคับ)'}), h('div', {class:'row'}, gps), h('div', {class:'grid2'}, lat, lng), label),
+    err,
+    h('div', {class:'row'}, save, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:function(){ d.close(); }}),
+      isNew ? null : h('button', {class:'btn danger', type:'button', text:'ลบโปรเจกต์', onclick:async function(){
+        if(!confirm('ลบโปรเจกต์ "' + p.name + '" ถาวร? การลบกู้คืนไม่ได้')) return;
+        var j = await call({action:'del', id:p.id});
+        if(j.ok){ d.close(); toast('ลบแล้ว'); await refresh(); } else toast('ลบไม่สำเร็จ');
+      }})));
+  d.replaceChildren(form); d.showModal();
+}
+
+/* ---------- owner ---------- */
+function ownerView(){
+  var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
+  var all = S.projects;
+  var counts = {}; ORDER.forEach(function(k){ counts[k] = 0; });
+  var mgrs = {}; all.forEach(function(p){ counts[keyOf(p)]++; mgrs[p.manager] = true; });
+  var stale = all.filter(function(p){ return keyOf(p) !== 'done' && ageDays(p.updatedAt) > STALE_DAYS; }).length;
+  box.appendChild(h('div', {class:'tiles'},
+    h('button', {class:'tile' + (S.filterStatus === '' ? ' on' : ''), onclick:function(){ S.filterStatus = ''; render(); }}, h('span', {class:'muted small', text:'ทั้งหมด'}), h('b', {text:String(all.length)})),
+    ORDER.map(function(k){ return h('button', {class:'tile ' + ST[k].cls + (S.filterStatus === k ? ' on' : ''), onclick:function(){ S.filterStatus = S.filterStatus === k ? '' : k; render(); }}, h('span', {class:'small', text:ST[k].label}), h('b', {text:String(counts[k])})); })));
+  if(stale) box.appendChild(h('p', {class:'warn', text:'มี ' + stale + ' โปรเจกต์ที่ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}));
+  var names = S.managers.slice(); Object.keys(mgrs).forEach(function(n){ if(names.indexOf(n) < 0) names.push(n); });
+  var reported = Object.keys(mgrs).length;
+  box.appendChild(h('p', {class:'muted small', text:'ผู้จัดการที่รายงานแล้ว ' + reported + ' จาก ' + names.length + ' คน'}));
+  function chip(label, val){ return h('button', {class:'chip' + (S.filterMgr === val ? ' on' : ''), onclick:function(){ S.filterMgr = val; render(); }, text:label}); }
+  box.appendChild(h('div', {class:'chips'}, chip('ทุกคน', ''), names.map(function(n){ return chip(n, n); })));
+  var list = all.filter(function(p){ return (!S.filterStatus || keyOf(p) === S.filterStatus) && (!S.filterMgr || p.manager === S.filterMgr); })
+    .sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)) || new Date(b.updatedAt) - new Date(a.updatedAt); });
+  box.appendChild(list.length ? h('div', {class:'cards'}, list.map(function(p){ return projectCard(p, false); })) : h('p', {class:'muted', text:'ไม่มีโปรเจกต์ตามตัวกรองนี้'}));
+  return box;
+}
+
+/* ---------- admin ---------- */
+function adminView(){
+  var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
+  var roleLabel = {manager:'ผู้จัดการ', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
+  box.appendChild(h('h2', {text:'จัดการชื่อและรหัส'}));
+  box.appendChild(h('p', {class:'muted small', text:'รหัสต้องยาวอย่างน้อย 6 ตัว ระบบไม่เก็บรหัสจริง เก็บเฉพาะค่าเข้ารหัส จึงดูรหัสเดิมไม่ได้ ตั้งใหม่ได้เท่านั้น'}));
+  var rows = S.people.map(function(p){
+    var inp = h('input', {type:'password', placeholder:'ตั้งรหัสใหม่', autocomplete:'new-password', style:'min-width:140px'});
+    var b = h('button', {class:'btn sm', text:'บันทึกรหัส', onclick:async function(){
+      if(inp.value.length < 6){ toast('รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)'); return; }
+      b.disabled = true;
+      var j = await call({action:'setPass', name:p.name, pass:inp.value});
+      b.disabled = false;
+      if(j.ok){ inp.value = ''; toast('ตั้งรหัสของ ' + p.name + ' แล้ว'); await refresh(); } else toast('ตั้งรหัสไม่สำเร็จ');
+    }});
+    return h('tr', {},
+      h('td', {text:p.name}), h('td', {text:roleLabel[p.role] || p.role}),
+      h('td', {text:p.hasPass ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง', class:p.hasPass ? '' : 'warn'}),
+      h('td', {}, h('div', {class:'row'}, inp, b)),
+      h('td', {}, p.role === 'admin' ? null : h('button', {class:'btn sm', text:p.active ? 'ปิดการใช้งาน' : 'เปิดการใช้งาน', onclick:async function(){
+        var j = await call({action:'setActive', name:p.name, active:!p.active});
+        if(j.ok) await refresh(); else toast('ไม่สำเร็จ');
+      }})));
+  });
+  box.appendChild(h('div', {class:'card', style:'overflow-x:auto'}, h('table', {}, h('thead', {}, h('tr', {}, ['ชื่อ','บทบาท','รหัส','ตั้งรหัสใหม่','สถานะ'].map(function(t){ return h('th', {text:t}); }))), h('tbody', {}, rows))));
+  var nn = h('input', {type:'text', maxlength:60, placeholder:'ชื่อผู้จัดการคนใหม่'});
+  box.appendChild(h('div', {class:'card'}, h('h3', {text:'เพิ่มผู้จัดการ'}), h('div', {class:'row'}, nn, h('button', {class:'btn primary', text:'เพิ่ม', onclick:async function(){
+    if(!nn.value.trim()) return;
+    var j = await call({action:'addPerson', name:nn.value});
+    if(j.ok){ nn.value = ''; toast('เพิ่มแล้ว ตั้งรหัสในตารางด้านบน'); await refresh(); } else toast(j.error === 'dup' ? 'มีชื่อนี้แล้ว' : 'ไม่สำเร็จ');
+  }}))));
+  return box;
+}
+
+/* ---------- start ---------- */
+(function(){
+  try{
+    var s = JSON.parse(sessionStorage.getItem('ps-s') || 'null');
+    if(s && s.token){ S.token = s.token; S.name = s.name; S.role = s.role; refresh(); return; }
+  }catch(e){}
+  render();
+})();
 </script>
 </body>
 </html>
