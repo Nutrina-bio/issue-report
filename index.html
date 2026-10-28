@@ -40,6 +40,12 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .pwrap button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--accent);cursor:pointer;font-size:.85rem;font-weight:500;padding:6px 8px;border-radius:6px}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .row>input[type=text]{width:auto;flex:1 1 180px}
+.tabs{display:flex;gap:6px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tab{border:0;background:transparent;padding:10px 14px;cursor:pointer;font-weight:500;white-space:nowrap;border-bottom:3px solid transparent;display:inline-flex;gap:8px;align-items:center;color:var(--muted)}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.dot{display:inline-block;min-width:20px;padding:0 6px;border-radius:99px;background:#C62828;color:#fff;font-size:.75rem;font-weight:600;line-height:20px;text-align:center}
+.cmtog{align-self:flex-start;text-align:left}
+.dim{opacity:.65}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .err{color:var(--late);font-size:.92rem}
 .login{max-width:380px;margin:12vh auto 0}
@@ -97,7 +103,7 @@ var ORDER = ['delayed','risk','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
 var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ'};
-var S = {token:null, id:null, name:null, role:null, projects:[], invites:[], managers:[], people:[], filterStatus:'', filterMgr:''};
+var S = {tabM:'mine', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], managers:[], people:[], filterStatus:'', filterMgr:''};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
 function $(s, r){ return (r || document).querySelector(s); }
@@ -151,7 +157,7 @@ async function call(body){
   return j;
 }
 function saveSession(){ try{ sessionStorage.setItem('ps-s', JSON.stringify({token:S.token, id:S.id, name:S.name, role:S.role})); }catch(e){} }
-function logoutLocal(){ S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
+function logoutLocal(){ S.tabM = 'mine'; S.tabO = 'all'; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
 function closeDlg(){ var d = $('#dlg'); if(d.open) d.close(); }
 
 /* ---------- password field with show/hide ---------- */
@@ -296,6 +302,31 @@ function commentEl(p, c){
     c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null);
 }
 
+function tabBar(items, cur, set){
+  return h('div', {class:'tabs', role:'tablist'}, items.map(function(t){
+    return h('button', {class:'tab' + (cur === t.key ? ' on' : ''), role:'tab', 'aria-selected':cur === t.key ? 'true' : 'false', onclick:function(){ set(t.key); }},
+      t.label, t.count > 0 ? h('span', {class:'dot', text:String(t.count), 'aria-label':t.count + ' รายการที่ค้างอยู่'}) : null);
+  }));
+}
+/* Comments inside a card stay collapsed to one line until the person opens them. */
+function commentsBlock(p){
+  var cs = p.comments || [];
+  if(!cs.length) return null;
+  var owner = S.role === 'owner', wrap = h('div', {class:'field'});
+  function draw(){
+    var open = !!S.open[p.id];
+    var pend = owner ? cs.filter(function(c){ return c.waiting.length; }).length : cs.filter(function(c){ return c.needsMyAck; }).length;
+    var tog = h('button', {class:'btn sm cmtog', type:'button', 'aria-expanded':open ? 'true' : 'false', onclick:function(){ S.open[p.id] = !open; draw(); }},
+      (open ? '▾ ย่อ · ' : '▸ ') + 'คอมเมนต์จากเจ้าของบริษัท ' + cs.length + ' รายการ' + (pend ? ' · ' + (owner ? 'รอรับทราบ ' : 'ยังไม่รับทราบ ') : ''),
+      pend ? h('span', {class:'dot', text:String(pend)}) : null);
+    var kids = [tog];
+    if(open) kids.push(h('div', {style:'display:flex;flex-direction:column;gap:10px'}, cs.map(function(c){ return commentEl(p, c); })));
+    wrap.replaceChildren.apply(wrap, kids);
+  }
+  draw();
+  return wrap;
+}
+
 function projectCard(p, mine){
   var k = keyOf(p), stale = k !== 'done' && ageDays(p.updatedAt) > STALE_DAYS, a = p.approval || {};
   var cards = [
@@ -308,12 +339,11 @@ function projectCard(p, mine){
     p.details ? h('p', {text:p.details}) : null,
     p.issue ? h('p', {class:'warn', text:'ปัญหา: ' + p.issue}) : null,
     p.images && p.images.length ? h('div', {class:'thumbs'}, p.images.map(function(id){ return thumbEl(id, false); })) : null,
-    p.loc ? h('a', {href:mapUrl(p.loc), target:'_blank', rel:'noopener', class:'small', text:'ดูแผนที่' + (p.label ? ' · ' + p.label : '')}) : null,
+    p.label ? h('p', {class:'small', text:'สถานที่: ' + p.label}) : null,
+    p.loc ? h('a', {href:mapUrl(p.loc), target:'_blank', rel:'noopener', class:'small', text:'ดูแผนที่'}) : null,
     h('p', {class:'small muted'}, 'อัปเดต ' + fmt(p.updatedAt), stale ? h('span', {class:'warn', text:' · ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}) : null)
   ];
-  if(p.comments && p.comments.length){
-    cards.push(h('div', {style:'display:flex;flex-direction:column;gap:10px'}, h('span', {class:'lbl', text:'คอมเมนต์จากเจ้าของบริษัท'}), p.comments.map(function(c){ return commentEl(p, c); })));
-  }
+  var cb = commentsBlock(p); if(cb) cards.push(cb);
   if(S.role === 'owner') cards.push(ownerTools(p));
   cards.push(h('div', {class:'row'},
     h('button', {class:'btn sm', text:'ไทม์ไลน์', onclick:function(){ timeline(p); }}),
@@ -335,30 +365,42 @@ function timeline(p){
 /* ---------- manager ---------- */
 function managerView(){
   var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
-  if(S.invites.length){
-    box.appendChild(h('div', {class:'card notice'}, h('h2', {text:'รอรับทราบ (' + S.invites.length + ')'}),
-      S.invites.map(function(iv){
-        return h('div', {class:'row', style:'justify-content:space-between'},
-          h('p', {text:iv.ownerName + ' ขอให้คุณร่วมรับผิดชอบโปรเจกต์ "' + iv.name + '"'}),
-          h('div', {class:'row'},
-            actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'coRespond', id:iv.id, accept:true}); }),
-            actBtn('ไม่ใช่โปรเจกต์ของฉัน', 'sm', 'กำลังบันทึก...', function(){ return call({action:'coRespond', id:iv.id, accept:false}); })));
-      })));
+  var DAY7 = 7;
+  var msgs = [];
+  S.projects.forEach(function(p){ (p.comments || []).forEach(function(c){
+    if(c.needsMyAck || ageDays(c.at) <= DAY7) msgs.push({p:p, c:c});
+  }); });
+  msgs.sort(function(x, y){ return (y.c.needsMyAck ? 1 : 0) - (x.c.needsMyAck ? 1 : 0) || new Date(y.c.at) - new Date(x.c.at); });
+  var needCount = msgs.filter(function(m){ return m.c.needsMyAck; }).length;
+  box.appendChild(tabBar([
+    {key:'mine', label:'โปรเจกต์ของฉัน', count:0},
+    {key:'msgs', label:'ข้อความจากเจ้าของบริษัท', count:needCount},
+    {key:'invites', label:'รอรับทราบ', count:S.invites.length}
+  ], S.tabM, function(k){ S.tabM = k; render(); }));
+  if(S.tabM === 'invites'){
+    if(!S.invites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
+    S.invites.forEach(function(iv){
+      box.appendChild(h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
+        h('p', {text:iv.ownerName + ' ขอให้คุณร่วมรับผิดชอบโปรเจกต์ "' + iv.name + '"'}),
+        h('div', {class:'row'},
+          actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'coRespond', id:iv.id, accept:true}); }),
+          actBtn('ไม่ใช่โปรเจกต์ของฉัน', 'sm', 'กำลังบันทึก...', function(){ return call({action:'coRespond', id:iv.id, accept:false}); })))));
+    });
+  } else if(S.tabM === 'msgs'){
+    if(!msgs.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีข้อความจากเจ้าของบริษัท'}));
+    msgs.forEach(function(n){
+      box.appendChild(h('div', {class:'card' + (n.c.needsMyAck ? ' notice' : ' dim')}, h('div', {class:'row', style:'justify-content:space-between'},
+        h('div', {}, h('p', {class:'small muted', text:'โปรเจกต์ "' + n.p.name + '" · ' + fmt(n.c.at)}), h('p', {text:n.c.text}),
+          n.c.needsMyAck ? null : h('p', {class:'small ok', text:'คุณรับทราบแล้ว'})),
+        n.c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:n.c.cid}); }) : null)));
+    });
+    if(msgs.length) box.appendChild(h('p', {class:'small muted', text:'ข้อความที่รับทราบแล้วเกิน ' + DAY7 + ' วันจะไม่แสดงที่นี่ ดูย้อนหลังได้ที่คอมเมนต์ในการ์ดโปรเจกต์'}));
+  } else {
+    box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ของฉัน (' + S.projects.length + ')'}), h('button', {class:'btn primary', text:'+ เพิ่มโปรเจกต์', onclick:function(){ projectForm(null); }})));
+    if(!S.projects.length) box.appendChild(h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์ กด "เพิ่มโปรเจกต์" เพื่อเริ่มรายงาน'}));
+    var sorted = S.projects.slice().sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)); });
+    box.appendChild(h('div', {class:'cards'}, sorted.map(function(p){ return projectCard(p, true); })));
   }
-  var need = [];
-  S.projects.forEach(function(p){ (p.comments || []).forEach(function(c){ if(c.needsMyAck) need.push({p:p, c:c}); }); });
-  if(need.length){
-    box.appendChild(h('div', {class:'card notice'}, h('h2', {text:'ข้อความใหม่จากเจ้าของบริษัท (' + need.length + ')'}),
-      need.map(function(n){
-        return h('div', {class:'row', style:'justify-content:space-between'},
-          h('div', {}, h('p', {class:'small muted', text:'โปรเจกต์ "' + n.p.name + '" · ' + fmt(n.c.at)}), h('p', {text:n.c.text})),
-          actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:n.c.cid}); }));
-      })));
-  }
-  box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ของฉัน (' + S.projects.length + ')'}), h('button', {class:'btn primary', text:'+ เพิ่มโปรเจกต์', onclick:function(){ projectForm(null); }})));
-  if(!S.projects.length) box.appendChild(h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์ กด "เพิ่มโปรเจกต์" เพื่อเริ่มรายงาน'}));
-  var sorted = S.projects.slice().sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)); });
-  box.appendChild(h('div', {class:'cards'}, sorted.map(function(p){ return projectCard(p, true); })));
   return box;
 }
 
@@ -386,14 +428,7 @@ function projectForm(p){
         return h('label', {}, cb, m.name + (st ? ({accepted:' (รับทราบแล้ว)', pending:' (รอรับทราบ)', declined:' (ปฏิเสธ)'}[st] || '') : ''));
       }))
     : h('p', {class:'small', text:(cur.coOwners || []).length ? cur.coOwners.map(coText).join(', ') : 'ไม่มี'});
-  var lat = h('input', {type:'text', inputmode:'decimal', placeholder:'ละติจูด', value:cur.loc ? cur.loc.lat : ''});
-  var lng = h('input', {type:'text', inputmode:'decimal', placeholder:'ลองจิจูด', value:cur.loc ? cur.loc.lng : ''});
-  var label = h('input', {type:'text', maxlength:120, placeholder:'ชื่อสถานที่ (ไม่บังคับ)', value:cur.label || ''});
-  var gps = h('button', {class:'btn sm', type:'button', text:'ใช้ตำแหน่งปัจจุบัน', onclick:function(){
-    if(!navigator.geolocation){ toast('เบราว์เซอร์นี้ไม่รองรับตำแหน่ง'); return; }
-    navigator.geolocation.getCurrentPosition(function(pos){ lat.value = pos.coords.latitude.toFixed(6); lng.value = pos.coords.longitude.toFixed(6); },
-      function(){ toast('ขอตำแหน่งไม่ได้ กรอกเองได้'); }, {enableHighAccuracy:true, timeout:10000});
-  }});
+  var label = h('input', {type:'text', id:'f-loc', maxlength:120, placeholder:'เช่น ไซต์งานลำปาง', value:cur.label || ''});
   var thumbs = h('div', {class:'thumbs'});
   function drawThumbs(){ thumbs.replaceChildren.apply(thumbs, images.map(function(id, i){ return thumbEl(id, true, function(){ images.splice(i, 1); drawThumbs(); }); })); }
   drawThumbs();
@@ -424,13 +459,11 @@ function projectForm(p){
     e.preventDefault(); err.textContent = '';
     var st = ($('input[name="f-status"]:checked', form) || {}).value;
     if(!name.value.trim()){ err.textContent = 'กรอกชื่อโปรเจกต์'; return; }
-    var la = lat.value.trim() === '' ? null : Number(lat.value), lo = lng.value.trim() === '' ? null : Number(lng.value);
-    if((la === null) !== (lo === null) || (la !== null && (!isFinite(la) || !isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180))){ err.textContent = 'พิกัดไม่ถูกต้อง'; return; }
     withBusy(save, 'กำลังบันทึก...', async function(){
       try{
         var j = await call({action:'save', project:{id:p ? p.id : '', name:name.value, status:st, progress:Number(prog.value), details:details.value, issue:issue.value,
           coOwners:coBoxes.filter(function(b){ return b.checked; }).map(function(b){ return b.value; }), images:images,
-          loc:la === null ? null : {lat:la, lng:lo}, label:label.value, requestApproval:reqBox.checked}});
+          loc:cur.loc || null, label:label.value, requestApproval:reqBox.checked}});
         if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ ลองอีกครั้ง');
       }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
     });
@@ -444,7 +477,7 @@ function projectForm(p){
     h('div', {class:'field'}, h('span', {class:'lbl', text:'ผู้รับผิดชอบร่วม'}), coField,
       creator ? h('p', {class:'small muted', text:'ผู้ที่เลือกต้องกดรับทราบในหน้าของตัวเองก่อน จึงจะเป็นโปรเจกต์ร่วม'}) : h('p', {class:'small muted', text:'เฉพาะผู้สร้างโปรเจกต์เพิ่มหรือถอดผู้ร่วมได้'})),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'รูปภาพ (ไม่เกิน ' + MAX_IMG + ' รูป)'}), thumbs, h('div', {class:'row'}, pick), files),
-    h('div', {class:'field'}, h('span', {class:'lbl', text:'พิกัดบนแผนที่ (ไม่บังคับ)'}), h('div', {class:'row'}, gps), h('div', {class:'grid2'}, lat, lng), label),
+    h('div', {class:'field'}, h('label', {for:'f-loc', text:'สถานที่ (ไม่บังคับ)'}), label),
     reqRow,
     !isNew && cur.isCreator && cur.ownerName !== S.name ? h('div', {class:'field'},
       h('p', {class:'small muted', text:'โปรเจกต์นี้ใช้ชื่อ "' + cur.ownerName + '" ถ้าตอนนี้คุณเป็นผู้ดูแลต่อ กดเพื่อเปลี่ยนเป็นชื่อ "' + S.name + '"'}),
@@ -501,28 +534,43 @@ function returnDialog(p){
 function ownerView(){
   var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
   var all = S.projects;
+  var pending = all.filter(function(p){ return p.approval && p.approval.state === 'pending'; });
+  var unacked = [];
+  all.forEach(function(p){ (p.comments || []).forEach(function(c){ if(c.waiting.length) unacked.push({p:p, c:c}); }); });
+  unacked.sort(function(x, y){ return new Date(y.c.at) - new Date(x.c.at); });
+  box.appendChild(tabBar([
+    {key:'all', label:'โปรเจกต์ทั้งหมด', count:0},
+    {key:'approve', label:'รออนุมัติ', count:pending.length},
+    {key:'waiting', label:'รอหัวหน้ารับทราบ', count:unacked.length}
+  ], S.tabO, function(k){ S.tabO = k; render(); }));
+  if(S.tabO === 'approve'){
+    if(!pending.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รออนุมัติ'}));
+    pending.forEach(function(p){
+      var req = (p.history || []).filter(function(e){ return e.event === 'approval-request'; }).pop();
+      box.appendChild(h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
+        h('div', {}, h('p', {text:p.name}), h('p', {class:'small muted', text:'โดย ' + p.ownerName + (req ? ' · ขอเมื่อ ' + fmt(req.at) : '')})),
+        h('div', {class:'row'},
+          actBtn('อนุมัติ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'approve', id:p.id}); }),
+          h('button', {class:'btn sm', text:'ส่งกลับให้แก้', onclick:function(){ returnDialog(p); }})))));
+    });
+    return box;
+  }
+  if(S.tabO === 'waiting'){
+    if(!unacked.length) box.appendChild(h('p', {class:'muted', text:'หัวหน้าทุกคนรับทราบคอมเมนต์ของคุณแล้ว'}));
+    unacked.forEach(function(u){
+      box.appendChild(h('div', {class:'card'},
+        h('p', {class:'small muted', text:'โปรเจกต์ "' + u.p.name + '" · ' + fmt(u.c.at)}), h('p', {text:u.c.text}),
+        h('p', {class:'small warn', text:'รอรับทราบ: ' + u.c.waiting.join(', ')}),
+        u.c.acks.length ? h('p', {class:'small ok', text:'รับทราบแล้ว: ' + u.c.acks.map(function(a){ return a.name; }).join(', ')}) : null));
+    });
+    return box;
+  }
   var counts = {}; ORDER.forEach(function(k){ counts[k] = 0; });
   var reportedBy = {}; all.forEach(function(p){ counts[keyOf(p)]++; reportedBy[p.ownerId] = true; });
   var stale = all.filter(function(p){ return keyOf(p) !== 'done' && ageDays(p.updatedAt) > STALE_DAYS; }).length;
   box.appendChild(h('div', {class:'tiles'},
     h('button', {class:'tile' + (S.filterStatus === '' ? ' on' : ''), onclick:function(){ S.filterStatus = ''; render(); }}, h('span', {class:'muted small', text:'ทั้งหมด'}), h('b', {text:String(all.length)})),
     ORDER.map(function(k){ return h('button', {class:'tile ' + ST[k].cls + (S.filterStatus === k ? ' on' : ''), onclick:function(){ S.filterStatus = S.filterStatus === k ? '' : k; render(); }}, h('span', {class:'small', text:ST[k].label}), h('b', {text:String(counts[k])})); })));
-  var pending = all.filter(function(p){ return p.approval && p.approval.state === 'pending'; });
-  if(pending.length){
-    box.appendChild(h('div', {class:'card notice'}, h('h2', {text:'รออนุมัติ (' + pending.length + ')'}),
-      pending.map(function(p){
-        var req = (p.history || []).filter(function(e){ return e.event === 'approval-request'; }).pop();
-        return h('div', {class:'row', style:'justify-content:space-between'},
-          h('div', {}, h('p', {text:p.name}), h('p', {class:'small muted', text:'โดย ' + p.ownerName + (req ? ' · ขอเมื่อ ' + fmt(req.at) : '')})),
-          h('div', {class:'row'},
-            actBtn('อนุมัติ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'approve', id:p.id}); }),
-            h('button', {class:'btn sm', text:'ส่งกลับให้แก้', onclick:function(){ returnDialog(p); }})));
-      })));
-  }
-  var unacked = [];
-  all.forEach(function(p){ (p.comments || []).forEach(function(c){ if(c.waiting.length) unacked.push({p:p, c:c}); }); });
-  if(unacked.length) box.appendChild(h('div', {class:'card'}, h('p', {class:'warn', text:'คอมเมนต์ที่ยังไม่ได้รับทราบ ' + unacked.length + ' รายการ'}),
-        unacked.slice(0, 10).map(function(u){ return h('p', {class:'small', text:'"' + u.p.name + '" · ' + fmt(u.c.at) + ' · รอ: ' + u.c.waiting.join(', ')}); })));
   if(stale) box.appendChild(h('p', {class:'warn', text:'มี ' + stale + ' โปรเจกต์ที่ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}));
   var reported = S.managers.filter(function(m){ return reportedBy[m.id]; }).length;
   box.appendChild(h('p', {class:'muted small', text:'ผู้จัดการที่รายงานแล้ว ' + reported + ' จาก ' + S.managers.length + ' คน'}));
