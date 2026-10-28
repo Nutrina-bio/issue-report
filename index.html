@@ -44,6 +44,7 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .tab{border:0;background:transparent;padding:10px 14px;cursor:pointer;font-weight:500;white-space:nowrap;border-bottom:3px solid transparent;display:inline-flex;gap:8px;align-items:center;color:var(--muted)}
 .tab.on{color:var(--ink);border-bottom-color:var(--accent)}
 .dot{display:inline-block;min-width:20px;padding:0 6px;border-radius:99px;background:#C62828;color:#fff;font-size:.75rem;font-weight:600;line-height:20px;text-align:center}
+.cnt{font-size:.8rem;font-weight:400;color:var(--muted)}
 .cmtog{align-self:flex-start;text-align:left}
 .dim{opacity:.65}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -95,15 +96,14 @@ td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertic
 var API = 'https://script.google.com/macros/s/AKfycby4begLhepsjGOOdCxJ-J5DUfO7QPUDXlRhK5wu0HtidfZf-q85sfMo66-JU0QTB6OSgw/exec';
 var ST = {
   delayed:{label:'ล่าช้า',cls:'late'},
-  risk:{label:'มีความเสี่ยง',cls:'risk'},
   inprogress:{label:'กำลังดำเนินการ',cls:'prog'},
-  done:{label:'เสร็จแล้ว',cls:'done'}
+  done:{label:'เสร็จสิ้น',cls:'done'}
 };
-var ORDER = ['delayed','risk','inprogress','done'];
+var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
 var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ'};
-var S = {tabM:'mine', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], managers:[], people:[], filterStatus:'', filterMgr:''};
+var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], managers:[], people:[], filterStatus:'', filterMgr:''};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
 function $(s, r){ return (r || document).querySelector(s); }
@@ -136,6 +136,14 @@ function fmt(iso){
 function ageDays(iso){ var d = new Date(iso); return isNaN(d) ? 0 : Math.floor((Date.now() - d.getTime()) / 86400000); }
 function mapUrl(loc){ return 'https://www.google.com/maps?q=' + encodeURIComponent(loc.lat + ',' + loc.lng); }
 function keyOf(p){ return ST[p.status] ? p.status : 'inprogress'; }
+/* Every project lands in exactly one bucket: returned for fixing, waiting for approval, or its own status. */
+var BK = {pending:{label:'รออนุมัติ', cls:'risk'}, fix:{label:'รอแก้ไข', cls:'late'}};
+function bucket(p){
+  var a = p.approval && p.approval.state;
+  if(a === 'returned') return 'fix';
+  if(a === 'pending') return 'pending';
+  return keyOf(p);
+}
 function errText(j, fallback){ return (j && ERR[j.error]) || fallback; }
 
 /* Shows a spinner in the button and blocks double clicks while fn runs. */
@@ -157,7 +165,7 @@ async function call(body){
   return j;
 }
 function saveSession(){ try{ sessionStorage.setItem('ps-s', JSON.stringify({token:S.token, id:S.id, name:S.name, role:S.role})); }catch(e){} }
-function logoutLocal(){ S.tabM = 'mine'; S.tabO = 'all'; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
+function logoutLocal(){ S.tabM = 'mine'; S.tabO = 'all'; S.subM = 'all'; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
 function closeDlg(){ var d = $('#dlg'); if(d.open) d.close(); }
 
 /* ---------- password field with show/hide ---------- */
@@ -275,7 +283,7 @@ function actBtn(label, cls, busyLabel, fn){
 /* ---------- shared project card ---------- */
 var EVT = {
   create:function(e){ return 'สร้างโปรเจกต์'; },
-  status:function(e){ return ST[e.status] ? ST[e.status].label : e.status; },
+  status:function(e){ return ST[e.status] ? ST[e.status].label : (e.status === 'risk' ? 'มีความเสี่ยง (สถานะเดิม)' : e.status); },
   'approval-request':function(){ return 'ส่งขออนุมัติจากเจ้าของบริษัท'; },
   approved:function(){ return 'เจ้าของบริษัทอนุมัติ'; },
   returned:function(e){ return 'เจ้าของบริษัทส่งกลับให้แก้: ' + e.note; },
@@ -299,13 +307,25 @@ function commentEl(p, c){
     h('p', {class:'small muted', text:c.author + ' · ' + fmt(c.at)}),
     h('p', {text:c.text}),
     h('p', {class:'small ' + (c.waiting.length ? 'warn' : 'ok'), text:(c.acks.length ? 'รับทราบแล้ว: ' + c.acks.map(function(a){ return a.name; }).join(', ') : 'ยังไม่มีผู้รับทราบ') + (c.waiting.length ? ' · รอ: ' + c.waiting.join(', ') : '')}),
-    c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null);
+    c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null,
+    S.role === 'owner' ? delCommentBtn(c) : null);
+}
+function delCommentBtn(c){
+  var b = h('button', {class:'btn sm danger', type:'button', text:'ลบคอมเมนต์', style:'align-self:flex-start'});
+  b.addEventListener('click', function(){
+    if(!confirm('ลบคอมเมนต์นี้ถาวร? ข้อความจะหายไปจากหน้าของผู้จัดการทุกคน กู้คืนไม่ได้')) return;
+    withBusy(b, 'กำลังลบ...', async function(){
+      try{ var j = await call({action:'delComment', cid:c.cid}); if(j.ok){ toast('ลบคอมเมนต์แล้ว'); await refresh(); } else toast(errText(j, 'ลบไม่สำเร็จ')); }
+      catch(x){ toast('เชื่อมต่อไม่ได้ ลองอีกครั้ง'); }
+    });
+  });
+  return b;
 }
 
 function tabBar(items, cur, set){
   return h('div', {class:'tabs', role:'tablist'}, items.map(function(t){
     return h('button', {class:'tab' + (cur === t.key ? ' on' : ''), role:'tab', 'aria-selected':cur === t.key ? 'true' : 'false', onclick:function(){ set(t.key); }},
-      t.label, t.count > 0 ? h('span', {class:'dot', text:String(t.count), 'aria-label':t.count + ' รายการที่ค้างอยู่'}) : null);
+      t.label, t.plain ? h('span', {class:'cnt', text:String(t.count)}) : (t.count > 0 ? h('span', {class:'dot', text:String(t.count), 'aria-label':t.count + ' รายการที่ค้างอยู่'}) : null));
   }));
 }
 /* Comments inside a card stay collapsed to one line until the person opens them. */
@@ -372,10 +392,12 @@ function managerView(){
   }); });
   msgs.sort(function(x, y){ return (y.c.needsMyAck ? 1 : 0) - (x.c.needsMyAck ? 1 : 0) || new Date(y.c.at) - new Date(x.c.at); });
   var needCount = msgs.filter(function(m){ return m.c.needsMyAck; }).length;
+  var returned = S.projects.filter(function(p){ return p.approval && p.approval.state === 'returned'; });
   box.appendChild(tabBar([
     {key:'mine', label:'โปรเจกต์ของฉัน', count:0},
     {key:'msgs', label:'ข้อความจากเจ้าของบริษัท', count:needCount},
-    {key:'invites', label:'รอรับทราบ', count:S.invites.length}
+    {key:'invites', label:'รอรับทราบ', count:S.invites.length},
+    {key:'fix', label:'รอแก้ไข', count:returned.length}
   ], S.tabM, function(k){ S.tabM = k; render(); }));
   if(S.tabM === 'invites'){
     if(!S.invites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
@@ -395,10 +417,21 @@ function managerView(){
         n.c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:n.c.cid}); }) : null)));
     });
     if(msgs.length) box.appendChild(h('p', {class:'small muted', text:'ข้อความที่รับทราบแล้วเกิน ' + DAY7 + ' วันจะไม่แสดงที่นี่ ดูย้อนหลังได้ที่คอมเมนต์ในการ์ดโปรเจกต์'}));
+  } else if(S.tabM === 'fix'){
+    box.appendChild(h('p', {class:'muted small', text:'โปรเจกต์ที่เจ้าของบริษัทส่งกลับให้แก้ แก้ไขแล้วติ๊ก "ส่งขออนุมัติใหม่" โปรเจกต์จะกลับไปอยู่ในแท็บ "โปรเจกต์ของฉัน"'}));
+    if(!returned.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอแก้ไข'}));
+    box.appendChild(h('div', {class:'cards'}, returned.map(function(p){ return projectCard(p, true); })));
   } else {
-    box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ของฉัน (' + S.projects.length + ')'}), h('button', {class:'btn primary', text:'+ เพิ่มโปรเจกต์', onclick:function(){ projectForm(null); }})));
-    if(!S.projects.length) box.appendChild(h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์ กด "เพิ่มโปรเจกต์" เพื่อเริ่มรายงาน'}));
-    var sorted = S.projects.slice().sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)); });
+    var mineList = S.projects.filter(function(p){ return bucket(p) !== 'fix'; });
+    box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ของฉัน (' + mineList.length + ')'}), h('button', {class:'btn primary', text:'+ เพิ่มโปรเจกต์', onclick:function(){ projectForm(null); }})));
+    var cnt = {pending:0}; ORDER.forEach(function(k){ cnt[k] = 0; }); mineList.forEach(function(p){ cnt[bucket(p)]++; });
+    var SUB = ['pending', 'inprogress', 'done', 'delayed'];
+    box.appendChild(tabBar([{key:'all', label:'ทั้งหมด', count:mineList.length, plain:true}].concat(SUB.map(function(k){ return {key:k, label:(BK[k] || ST[k]).label, count:cnt[k], plain:true}; })),
+      S.subM, function(k){ S.subM = k; render(); }));
+    if(!mineList.length) box.appendChild(h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์ กด "เพิ่มโปรเจกต์" เพื่อเริ่มรายงาน'}));
+    var shown = mineList.filter(function(p){ return S.subM === 'all' || bucket(p) === S.subM; });
+    if(mineList.length && !shown.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ในสถานะนี้'}));
+    var sorted = shown.slice().sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)); });
     box.appendChild(h('div', {class:'cards'}, sorted.map(function(p){ return projectCard(p, true); })));
   }
   return box;
@@ -512,7 +545,7 @@ function ownerTools(p){
       catch(x){ toast('เชื่อมต่อไม่ได้ ลองอีกครั้ง'); }
     });
   });
-  box.appendChild(h('div', {class:'field'}, ta, h('div', {class:'row'}, send, h('span', {class:'small muted', text:'ส่งแล้วแก้ไขหรือลบไม่ได้'}))));
+  box.appendChild(h('div', {class:'field'}, ta, h('div', {class:'row'}, send, h('span', {class:'small muted', text:'ส่งแล้วแก้ไขไม่ได้ (ลบได้)'}))));
   return box;
 }
 function returnDialog(p){
@@ -535,13 +568,15 @@ function ownerView(){
   var box = h('div', {style:'display:flex;flex-direction:column;gap:14px'});
   var all = S.projects;
   var pending = all.filter(function(p){ return p.approval && p.approval.state === 'pending'; });
+  var returned = all.filter(function(p){ return p.approval && p.approval.state === 'returned'; });
   var unacked = [];
   all.forEach(function(p){ (p.comments || []).forEach(function(c){ if(c.waiting.length) unacked.push({p:p, c:c}); }); });
   unacked.sort(function(x, y){ return new Date(y.c.at) - new Date(x.c.at); });
   box.appendChild(tabBar([
     {key:'all', label:'โปรเจกต์ทั้งหมด', count:0},
     {key:'approve', label:'รออนุมัติ', count:pending.length},
-    {key:'waiting', label:'รอหัวหน้ารับทราบ', count:unacked.length}
+    {key:'waiting', label:'รอหัวหน้ารับทราบ', count:unacked.length},
+    {key:'fix', label:'รอแก้ไข', count:returned.length}
   ], S.tabO, function(k){ S.tabO = k; render(); }));
   if(S.tabO === 'approve'){
     if(!pending.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รออนุมัติ'}));
@@ -555,6 +590,12 @@ function ownerView(){
     });
     return box;
   }
+  if(S.tabO === 'fix'){
+    box.appendChild(h('p', {class:'muted small', text:'โปรเจกต์ที่คุณส่งกลับให้แก้และผู้จัดการยังไม่ส่งขออนุมัติใหม่'}));
+    if(!returned.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอแก้ไข'}));
+    box.appendChild(h('div', {class:'cards'}, returned.map(function(p){ return projectCard(p, false); })));
+    return box;
+  }
   if(S.tabO === 'waiting'){
     if(!unacked.length) box.appendChild(h('p', {class:'muted', text:'หัวหน้าทุกคนรับทราบคอมเมนต์ของคุณแล้ว'}));
     unacked.forEach(function(u){
@@ -565,19 +606,19 @@ function ownerView(){
     });
     return box;
   }
-  var counts = {}; ORDER.forEach(function(k){ counts[k] = 0; });
-  var reportedBy = {}; all.forEach(function(p){ counts[keyOf(p)]++; reportedBy[p.ownerId] = true; });
+  var counts = {pending:0, fix:0}; ORDER.forEach(function(k){ counts[k] = 0; });
+  var reportedBy = {}; all.forEach(function(p){ counts[bucket(p)]++; reportedBy[p.ownerId] = true; });
   var stale = all.filter(function(p){ return keyOf(p) !== 'done' && ageDays(p.updatedAt) > STALE_DAYS; }).length;
   box.appendChild(h('div', {class:'tiles'},
     h('button', {class:'tile' + (S.filterStatus === '' ? ' on' : ''), onclick:function(){ S.filterStatus = ''; render(); }}, h('span', {class:'muted small', text:'ทั้งหมด'}), h('b', {text:String(all.length)})),
-    ORDER.map(function(k){ return h('button', {class:'tile ' + ST[k].cls + (S.filterStatus === k ? ' on' : ''), onclick:function(){ S.filterStatus = S.filterStatus === k ? '' : k; render(); }}, h('span', {class:'small', text:ST[k].label}), h('b', {text:String(counts[k])})); })));
+    ['pending', 'fix'].concat(ORDER).map(function(k){ var d = BK[k] || ST[k]; return h('button', {class:'tile ' + d.cls + (S.filterStatus === k ? ' on' : ''), onclick:function(){ S.filterStatus = S.filterStatus === k ? '' : k; render(); }}, h('span', {class:'small', text:d.label}), h('b', {text:String(counts[k])})); })));
   if(stale) box.appendChild(h('p', {class:'warn', text:'มี ' + stale + ' โปรเจกต์ที่ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}));
   var reported = S.managers.filter(function(m){ return reportedBy[m.id]; }).length;
   box.appendChild(h('p', {class:'muted small', text:'ผู้จัดการที่รายงานแล้ว ' + reported + ' จาก ' + S.managers.length + ' คน'}));
   function chip(label, val){ return h('button', {class:'chip' + (S.filterMgr === val ? ' on' : ''), onclick:function(){ S.filterMgr = val; render(); }, text:label}); }
   box.appendChild(h('div', {class:'chips'}, chip('ทุกคน', ''), S.managers.map(function(m){ return chip(m.name, m.id); })));
   function ofMgr(p, id){ return p.ownerId === id || (p.coOwners || []).some(function(c){ return c.id === id && c.state === 'accepted'; }); }
-  var list = all.filter(function(p){ return (!S.filterStatus || keyOf(p) === S.filterStatus) && (!S.filterMgr || ofMgr(p, S.filterMgr)); })
+  var list = all.filter(function(p){ return (!S.filterStatus || bucket(p) === S.filterStatus) && (!S.filterMgr || ofMgr(p, S.filterMgr)); })
     .sort(function(a, b){ return ORDER.indexOf(keyOf(a)) - ORDER.indexOf(keyOf(b)) || new Date(b.updatedAt) - new Date(a.updatedAt); });
   box.appendChild(list.length ? h('div', {class:'cards'}, list.map(function(p){ return projectCard(p, false); })) : h('p', {class:'muted', text:'ไม่มีโปรเจกต์ตามตัวกรองนี้'}));
   return box;
