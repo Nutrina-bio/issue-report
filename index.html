@@ -291,8 +291,33 @@ var EVT = {
   'co-remove':function(e){ return 'ถอด ' + e.note + ' ออกจากผู้ร่วมรับผิดชอบ'; },
   'co-accepted':function(){ return 'รับทราบการร่วมรับผิดชอบ'; },
   'co-declined':function(){ return 'ปฏิเสธการร่วมรับผิดชอบ'; },
-  transfer:function(e){ return 'โอนชื่อผู้รับผิดชอบ ' + e.note; }
+  transfer:function(e){ return 'โอนชื่อผู้รับผิดชอบ ' + e.note; },
+  edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); }
 };
+var EDIT_LBL = {name:'ชื่อโปรเจกต์', details:'รายละเอียด', issue:'ปัญหา', label:'สถานที่', images:'รูป'};
+function editOld(e){ try{ var o = JSON.parse(e.note || '{}'); return o && typeof o === 'object' ? o : {}; }catch(x){ return {}; } }
+/* The values as they were before this edit (the card itself always shows the latest). */
+function editDetail(e){
+  var o = editOld(e), box = h('div', {class:'card', style:'margin-top:6px;padding:10px;display:none;gap:6px;flex-direction:column'}), built = false;
+  function build(){
+    Object.keys(EDIT_LBL).forEach(function(k){
+      if(!(k in o)) return;
+      if(k === 'images'){
+        var ids = Array.isArray(o.images) ? o.images : [];
+        box.appendChild(h('div', {}, h('b', {class:'small', text:EDIT_LBL[k] + ' (ก่อนแก้)'}),
+          ids.length ? h('div', {class:'thumbs'}, ids.map(function(id){ return thumbEl(id, false); })) : h('p', {class:'small muted', text:'(ไม่มีรูป)'})));
+      } else {
+        box.appendChild(h('div', {}, h('b', {class:'small', text:EDIT_LBL[k] + ' (ก่อนแก้)'}), h('p', {style:'white-space:pre-wrap;margin:2px 0 0', text:o[k] === '' ? '(ว่าง)' : String(o[k])})));
+      }
+    });
+  }
+  var btn = h('button', {class:'cmtog', type:'button', text:'ดูค่าเดิม'});
+  btn.addEventListener('click', function(){
+    if(!built){ build(); built = true; }  /* images are only fetched when opened */
+    var open = box.style.display === 'none'; box.style.display = open ? 'flex' : 'none'; btn.textContent = open ? 'ซ่อนค่าเดิม' : 'ดูค่าเดิม';
+  });
+  return h('div', {}, btn, box);
+}
 function approvalBadge(p){
   var a = p.approval || {};
   if(a.state === 'pending') return h('span', {class:'badge risk', text:'รอเจ้าของบริษัทอนุมัติ'});
@@ -376,7 +401,7 @@ function timeline(p){
   d.replaceChildren(h('h2', {text:p.name}), h('p', {class:'muted small', text:'ประวัติ'}),
     items.length ? h('ul', {class:'tl', style:'margin-top:12px'}, items.map(function(e){
       var f = EVT[e.event] || EVT.status;
-      return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create') ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}));
+      return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create') ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
     })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'}),
     h('div', {class:'row'}, h('button', {class:'btn', text:'ปิด', onclick:closeDlg})));
   d.showModal();
