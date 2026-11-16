@@ -116,7 +116,7 @@ var ST = {
 var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
-var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
+var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', noreport:'เขียนสรุปงานที่ทำไปแล้วก่อนส่งต่อ', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
 var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], handoverInvites:[], adminProjects:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
@@ -328,6 +328,7 @@ var EVT = {
   'step-done':function(e){ return 'เสร็จ ' + e.note; },
   'step-reopen':function(e){ return 'ย้อนกลับมาทำใหม่ ' + e.note; },
   turn:function(e){ return e.note; },
+  'turn-report':function(e){ var o = editOld(e); return (o.kind === 'reason' ? 'เปลี่ยนคนถือตา เหตุผล: ' : 'สรุปงาน: ') + (o.text || ''); },
   edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); }
 };
 var EDIT_LBL = {name:'ชื่อโปรเจกต์', details:'รายละเอียด', issue:'ปัญหา', label:'สถานที่', deadline:'กำหนดเสร็จ', images:'รูป'};
@@ -529,6 +530,12 @@ function workBox(p, mine){
   var t = p.turn;
   box.append(t ? workLine(p) : h('p', {class:'small muted', text:'ยังไม่มีคนถือตา'}));
   if(t && t.note) box.append(h('p', {class:'small', text:'ให้ทำ: ' + t.note + (t.by ? ' (ส่งโดย ' + t.by + ')' : '')}));
+  if(t && t.from && t.from.report){
+    box.append(h('div', {class:'cm'},
+      h('p', {class:'small muted', text:(t.from.kind === 'reason' ? 'เหตุผลที่เปลี่ยนคนถือตา' : 'สรุปงานจาก ' + t.from.name) + ' · ' + fmt(t.from.at)}),
+      h('p', {class:'small', text:t.from.report}),
+      t.from.images && t.from.images.length ? h('div', {class:'thumbs'}, t.from.images.map(function(id){ return thumbEl(id, false); })) : null));
+  }
   if(mine && (p.myTurn || p.isCreator)) box.append(h('div', {class:'row'}, h('button', {class:'btn sm primary', type:'button', text:'ส่งต่อให้…', onclick:function(){ passDialog(p); }})));
   return box;
 }
@@ -568,22 +575,44 @@ function passDialog(p){
   var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
   var people = [{id:p.ownerId, name:p.ownerName}].concat((p.coOwners || []).filter(function(c){ return c.state === 'accepted'; }).map(function(c){ return {id:c.id, name:c.name}; }));
   var to = h('select', {id:'tp-to'}, h('option', {value:'', text:'เลือกคน'}), people.filter(function(m){ return !p.turn || m.id !== p.turn.to; }).map(function(m){ return h('option', {value:m.id, text:m.name}); }));
+  var holder = !!(p.turn && p.turn.to === S.id);
+  var report = h('textarea', {id:'tp-report', maxlength:1000, style:'min-height:80px', placeholder:holder ? 'เช่น ติดต่อร้านแล้ว 3 ร้าน ได้ราคามา 2 ร้าน รอร้านที่ 3' : 'เช่น ไก่ลาพักร้อน เลยให้ปลาทำต่อ'});
+  var rimgs = [], rthumbs = h('div', {class:'thumbs'});
+  function drawR(){ rthumbs.replaceChildren.apply(rthumbs, rimgs.map(function(id, i){ return thumbEl(id, true, function(){ rimgs.splice(i, 1); drawR(); }); })); }
+  var rfiles = h('input', {type:'file', accept:'image/*', multiple:true, hidden:true});
+  var rpick = h('button', {class:'btn sm', type:'button', text:'แนบรูป'});
+  rpick.addEventListener('click', function(){ rfiles.click(); });
+  rfiles.addEventListener('change', function(){
+    var list = Array.prototype.slice.call(rfiles.files); rfiles.value = '';
+    withBusy(rpick, 'กำลังอัปโหลด...', async function(){
+      for(var i = 0; i < list.length; i++){
+        if(rimgs.length >= MAX_IMG){ toast('แนบรูปได้ไม่เกิน ' + MAX_IMG + ' รูป'); break; }
+        try{ var b64 = await resize(list[i]); var j = await call({action:'upload', data:b64});
+          if(j.ok){ imgCache[j.id] = {d:'data:image/jpeg;base64,' + b64, t:Date.now()}; rimgs.push(j.id); drawR(); } else toast('อัปโหลดรูปไม่สำเร็จ');
+        }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
+      }
+    });
+  });
   var note = h('textarea', {id:'tp-note', maxlength:300, style:'min-height:64px', placeholder:'เช่น ขอใบเสนอราคา 3 เจ้า'});
   var due = h('input', {type:'date', id:'tp-due', min:'2000-01-01', max:p.deadline || '2100-12-31'});
   var go = h('button', {class:'btn primary', type:'button', text:'ส่งต่อ'});
   go.addEventListener('click', function(){
     err.textContent = '';
+    if(!report.value.trim()){ err.textContent = holder ? ERR.noreport : 'เขียนเหตุผลที่เปลี่ยนคนถือตา'; return; }
     if(!to.value){ err.textContent = 'เลือกคนที่จะส่งต่อ'; return; }
     if(!note.value.trim()){ err.textContent = 'เขียนว่าให้ทำอะไร'; return; }
     if(!due.value){ err.textContent = 'ใส่วันที่ต้องเสร็จ'; return; }
     if(p.deadline && due.value > p.deadline){ err.textContent = ERR.turndue; return; }
     withBusy(go, 'กำลังส่ง...', async function(){
-      try{ var j = await call({action:'turnPass', id:p.id, to:to.value, note:note.value, due:due.value}); if(j.ok){ closeDlg(); toast('ส่งต่อแล้ว'); await refresh(); } else err.textContent = errText(j, 'ส่งต่อไม่สำเร็จ'); }
+      try{ var j = await call({action:'turnPass', id:p.id, to:to.value, note:note.value, due:due.value, report:report.value, images:holder ? rimgs : []}); if(j.ok){ closeDlg(); toast('ส่งต่อแล้ว'); await refresh(); } else err.textContent = errText(j, 'ส่งต่อไม่สำเร็จ'); }
       catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
     });
   });
   d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
     h('h2', {text:'ส่งต่องาน: ' + p.name}),
+    holder
+      ? h('div', {class:'field'}, h('label', {for:'tp-report', text:'สรุปงานที่คุณทำไปแล้ว (ต้องกรอก)'}), report, rthumbs, h('div', {class:'row'}, rpick), rfiles)
+      : h('div', {class:'field'}, h('label', {for:'tp-report', text:'เหตุผลที่เปลี่ยนคนถือตา (ตอนนี้ ' + (p.turn ? p.turn.toName : '-') + ' ถือตาอยู่)'}), report),
     h('div', {class:'field'}, h('label', {for:'tp-to', text:'ส่งต่อให้'}), to),
     h('div', {class:'field'}, h('label', {for:'tp-note', text:'ให้ทำอะไร'}), note),
     h('div', {class:'field'}, h('label', {for:'tp-due', text:'ต้องเสร็จภายใน' + (p.deadline ? ' (ไม่เกิน ' + dlText(p.deadline) + ')' : '')}), due), err,
@@ -594,7 +623,8 @@ function timelineList(p){
   var items = (p.history || []).slice().sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
-    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
+    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null,
+      e.event === 'turn-report' && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
