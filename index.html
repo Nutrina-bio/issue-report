@@ -363,7 +363,8 @@ function commentEl(p, c){
     h('p', {class:'small muted', text:c.author + ' · ' + fmt(c.at)}),
     h('p', {text:c.text}),
     c.images && c.images.length ? h('div', {class:'thumbs'}, c.images.map(function(id){ return thumbEl(id, false); })) : null,
-    h('p', {class:'small muted', text:c.to === 'all' || !c.to ? 'ถึง: ทุกคน (@ALL)' : c.to.length ? 'ถึง: ' + c.to.join(', ') : 'คอมเมนต์ทั่วไป ไม่ต้องรับทราบ'}),
+    // an untagged (plain) comment shows no "to" line and no acknowledgement line
+    c.to && c.to !== 'all' && !c.to.length ? null : h('p', {class:'small muted', text:'ถึง: ' + (c.to === 'all' || !c.to ? 'ทุกคน (@ALL)' : c.to.join(', '))}),
     c.to && c.to !== 'all' && !c.to.length ? null : h('p', {class:'small ' + (c.waiting.length ? 'warn' : 'ok'), text:(c.acks.length ? 'รับทราบแล้ว: ' + c.acks.map(function(a){ return a.name; }).join(', ') : 'ยังไม่มีผู้รับทราบ') + (c.waiting.length ? ' · รอ: ' + c.waiting.join(', ') : '')}),
     c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null,
     S.role === 'owner' ? delCommentBtn(c) : null);
