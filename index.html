@@ -74,6 +74,12 @@ a{color:var(--accent)}
 .cm.need{border-left-color:var(--risk)}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px;width:min(560px,calc(100vw - 24px));max-height:90vh}
 dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog.big{width:min(920px,calc(100vw - 24px));max-height:92vh;min-height:min(560px,92vh);padding:0}
+.pd-head{position:sticky;top:0;z-index:1;background:var(--surface);padding:16px 18px 0;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.pd-body{padding:16px 18px 20px;display:flex;flex-direction:column;gap:12px}
+.card.click{cursor:pointer}.card.click:hover{border-color:var(--accent)}
+.clamp1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cover{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--bg);border:1px solid var(--line)}
 ul.tl{list-style:none;margin:0;padding:0}
 ul.tl li{padding:0 0 12px 18px;border-left:2px solid var(--line);margin-left:5px;position:relative;font-size:.92rem}
 ul.tl li::before{content:'';position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
@@ -91,6 +97,7 @@ td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertic
 <body>
 <div class="wrap" id="app"></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<dialog id="pd" class="big" aria-label="รายละเอียดโปรเจกต์"></dialog>
 <dialog id="dlg"></dialog>
 <script>
 'use strict';
@@ -166,8 +173,10 @@ async function call(body){
   return j;
 }
 function saveSession(){ try{ sessionStorage.setItem('ps-s', JSON.stringify({token:S.token, id:S.id, name:S.name, role:S.role})); }catch(e){} }
-function logoutLocal(){ S.tabM = 'mine'; S.tabO = 'all'; S.subM = 'all'; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
+function logoutLocal(){ var pd = $('#pd'); if(pd && pd.open) pd.close(); S.tabM = 'mine'; S.tabO = 'all'; S.subM = 'all'; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
 function closeDlg(){ var d = $('#dlg'); if(d.open) d.close(); }
+function pdClosed(){ S.pd = null; $('#pd').replaceChildren(); }
+$('#pd').addEventListener('close', pdClosed);
 
 /* ---------- password field with show/hide ---------- */
 function pwField(attrs){
@@ -241,6 +250,7 @@ function render(){
   if(S.role === 'admin') app.appendChild(adminView());
   else if(S.role === 'owner') app.appendChild(ownerView());
   else app.appendChild(managerView());
+  redrawDetail();
 }
 
 function loginView(){
@@ -387,29 +397,60 @@ function tabBar(items, cur, set){
       t.label, t.plain ? h('span', {class:'cnt', text:String(t.count)}) : (t.count > 0 ? h('span', {class:'dot', text:String(t.count), 'aria-label':t.count + ' รายการที่ค้างอยู่'}) : null));
   }));
 }
-/* Comments inside a card stay collapsed to one line until the person opens them. */
-function commentsBlock(p){
+/* Compact card: the essentials only. Clicking it opens the full detail in a large pop-up. */
+function projectCard(p, mine){
+  var k = keyOf(p), a = p.approval || {};
   var cs = p.comments || [];
-  if(!cs.length) return null;
-  var owner = S.role === 'owner', wrap = h('div', {class:'field'});
-  function draw(){
-    var open = !!S.open[p.id];
-    var pend = owner ? cs.filter(function(c){ return c.waiting.length; }).length : cs.filter(function(c){ return c.needsMyAck; }).length;
-    var tog = h('button', {class:'btn sm cmtog', type:'button', 'aria-expanded':open ? 'true' : 'false', onclick:function(){ S.open[p.id] = !open; draw(); }},
-      (open ? '▾ ย่อ · ' : '▸ ') + 'คอมเมนต์จากเจ้าของบริษัท ' + cs.length + ' รายการ' + (pend ? ' · ' + (owner ? 'รอรับทราบ ' : 'ยังไม่รับทราบ ') : ''),
-      pend ? h('span', {class:'dot', text:String(pend)}) : null);
-    var kids = [tog];
-    if(open) kids.push(h('div', {style:'display:flex;flex-direction:column;gap:10px'}, cs.map(function(c){ return commentEl(p, c); })));
-    wrap.replaceChildren.apply(wrap, kids);
-  }
-  draw();
-  return wrap;
+  var pend = S.role === 'owner' ? cs.filter(function(c){ return c.waiting.length; }).length : cs.filter(function(c){ return c.needsMyAck; }).length;
+  var cover = null;
+  if(p.images && p.images.length){ cover = h('img', {class:'cover', alt:'', loading:'lazy'}); (function(img){ loadImg(p.images[0], function(src){ img.src = src; }); })(cover); }
+  var co = (p.coOwners || []).filter(function(c){ return c.state === 'accepted'; }).map(function(c){ return c.name; });
+  var card = h('div', {class:'card click', role:'button', tabindex:'0', 'aria-label':'เปิดรายละเอียดโปรเจกต์ ' + p.name},
+    h('div', {class:'row', style:'justify-content:space-between;align-items:flex-start;flex-wrap:nowrap'},
+      h('div', {style:'display:flex;flex-direction:column;gap:6px;min-width:0'},
+        h('div', {class:'row'}, h('h3', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
+        approvalBadge(p) ? h('div', {class:'row'}, approvalBadge(p), a.state === 'approved' && a.editedAfter ? h('span', {class:'warn', text:'แก้ไขหลังอนุมัติ'}) : null) : null),
+      cover),
+    h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
+    h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '%'}),
+    deadlineRow(p),
+    h('p', {class:'small clamp1'}, h('b', {text:'ผู้รับผิดชอบ: '}), p.ownerName + (mine && !p.isCreator ? ' (โปรเจกต์ร่วม)' : '') + (co.length ? ' · ร่วม: ' + co.join(', ') : '')),
+    p.issue ? h('p', {class:'warn clamp1', text:'ปัญหา: ' + p.issue}) : null,
+    pend ? h('p', {class:'small warn'}, 'คอมเมนต์' + (S.role === 'owner' ? 'รอรับทราบ ' : 'ที่ยังไม่รับทราบ '), h('span', {class:'dot', text:String(pend)})) : null);
+  function open(){ openDetail(p.id, mine); }
+  card.addEventListener('click', open);
+  card.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+  return card;
 }
 
-function projectCard(p, mine){
+/* ---------- project detail pop-up (tabs: details / timeline) ---------- */
+function openDetail(id, mine){
+  S.pd = {id:id, mine:!!mine, tab:'info'};
+  drawDetail();
+  var d = $('#pd'); if(!d.open) d.showModal();
+}
+function redrawDetail(){
+  var d = $('#pd');
+  if(!d || !d.open || !S.pd) return;
+  if(!S.projects.some(function(p){ return p.id === S.pd.id; })){ d.close(); return; } // deleted or handed over
+  var top = d.scrollTop; drawDetail(); d.scrollTop = top;
+}
+function drawDetail(){
+  var d = $('#pd'), p = S.projects.filter(function(x){ return x.id === S.pd.id; })[0];
+  if(!p) return;
+  var k = keyOf(p);
+  var head = h('div', {class:'pd-head'},
+    h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
+      h('div', {class:'row'}, h('h2', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
+      h('button', {class:'btn sm', type:'button', text:'ปิด', 'aria-label':'ปิดรายละเอียด', onclick:function(){ d.close(); }})),
+    tabBar([{key:'info', label:'รายละเอียด', count:0}, {key:'tl', label:'ไทม์ไลน์', count:(p.history || []).length, plain:true}], S.pd.tab, function(t){ S.pd.tab = t; drawDetail(); d.scrollTop = 0; }));
+  var body = h('div', {class:'pd-body'}, S.pd.tab === 'tl' ? timelineList(p) : detailBody(p, S.pd.mine));
+  d.replaceChildren(head, body);
+}
+function detailBody(p, mine){
   var k = keyOf(p), stale = k !== 'done' && ageDays(p.updatedAt) > STALE_DAYS, a = p.approval || {};
-  var cards = [
-    h('div', {class:'row', style:'justify-content:space-between'}, h('h3', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
+  var cs = p.comments || [];
+  var out = [
     approvalBadge(p) ? h('div', {class:'row'}, approvalBadge(p), a.state === 'approved' && a.editedAfter ? h('span', {class:'warn', text:'แก้ไขหลังอนุมัติ'}) : null) : null,
     a.state === 'returned' && a.note ? h('p', {class:'warn', text:'เหตุผลที่ส่งกลับ: ' + a.note}) : null,
     h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
@@ -423,25 +464,20 @@ function projectCard(p, mine){
     p.images && p.images.length ? h('div', {class:'thumbs'}, p.images.map(function(id){ return thumbEl(id, false); })) : null,
     p.label ? h('p', {class:'small', text:'สถานที่: ' + p.label}) : null,
     p.loc ? h('a', {href:mapUrl(p.loc), target:'_blank', rel:'noopener', class:'small', text:'ดูแผนที่'}) : null,
-    h('p', {class:'small muted'}, 'อัปเดต ' + fmt(p.updatedAt), stale ? h('span', {class:'warn', text:' · ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}) : null)
+    h('p', {class:'small muted'}, 'อัปเดต ' + fmt(p.updatedAt), stale ? h('span', {class:'warn', text:' · ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}) : null),
+    mine && p.canEdit ? h('div', {class:'row'}, h('button', {class:'btn primary sm', type:'button', text:'แก้ไข', onclick:function(){ projectForm(p); }})) : null,
+    h('h3', {text:'คอมเมนต์จากเจ้าของบริษัท' + (cs.length ? ' (' + cs.length + ')' : ''), style:'margin-top:8px'}),
+    cs.length ? h('div', {class:'cms', style:'display:flex;flex-direction:column;gap:10px'}, cs.map(function(c){ return commentEl(p, c); })) : h('p', {class:'muted small', text:'ยังไม่มีคอมเมนต์'})
   ];
-  var cb = commentsBlock(p); if(cb) cards.push(cb);
-  if(S.role === 'owner') cards.push(ownerTools(p));
-  cards.push(h('div', {class:'row'},
-    h('button', {class:'btn sm', text:'ไทม์ไลน์', onclick:function(){ timeline(p); }}),
-    mine && p.canEdit ? h('button', {class:'btn sm', text:'แก้ไข', onclick:function(){ projectForm(p); }}) : null));
-  return h('div', {class:'card'}, cards);
+  if(S.role === 'owner') out.push(ownerTools(p));
+  return out;
 }
-function timeline(p){
-  var d = $('#dlg');
+function timelineList(p){
   var items = (p.history || []).slice().sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
-  d.replaceChildren(h('h2', {text:p.name}), h('p', {class:'muted small', text:'ประวัติ'}),
-    items.length ? h('ul', {class:'tl', style:'margin-top:12px'}, items.map(function(e){
-      var f = EVT[e.event] || EVT.status;
-      return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create') ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
-    })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'}),
-    h('div', {class:'row'}, h('button', {class:'btn', text:'ปิด', onclick:closeDlg})));
-  d.showModal();
+  return items.length ? h('ul', {class:'tl'}, items.map(function(e){
+    var f = EVT[e.event] || EVT.status;
+    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create') ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
+  })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
 /* ---------- manager ---------- */
