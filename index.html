@@ -487,7 +487,9 @@ var EVT = {
   'step-approved':function(e){ return 'เจ้าของบริษัทอนุมัติ ' + e.note; },
   'step-returned':function(e){ return 'เจ้าของบริษัทส่งกลับ ' + e.note; },
   'turn-report':function(e){ var o = editOld(e); return (o.kind === 'reason' ? 'เปลี่ยนคนถือตา เหตุผล: ' : 'สรุปงาน: ') + (o.text || ''); },
-  edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); }
+  edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); },
+  'owner-edit':function(e){ return 'เจ้าของบริษัท' + EVT.edit(e); },
+  'notice-ack':function(){ return 'รับทราบสิ่งที่เจ้าของบริษัทมอบ/แก้ไข'; }
 };
 var EDIT_LBL = {name:'ชื่อโปรเจกต์', details:'รายละเอียด', issue:'ปัญหา', label:'สถานที่', deadline:'กำหนดเสร็จ', images:'รูป'};
 /* Deadline arrives as 'YYYY-MM-DD'. Days are counted by calendar day in the viewer's own time zone. */
@@ -574,15 +576,22 @@ function staleRow(p){
 }
 /* pop-up right after logging in, when there is something to tell */
 function alertsPopup(r){
-  if(!alertCount(r)) return;
+  var nts = S.role === 'owner' ? [] : myNotices();
+  if(!alertCount(r) && !nts.length) return;
   var d = $('#dlg'), MAXN = 8;
   var items = r.late.concat(r.soon);
   d.replaceChildren(h('div', {class:'alerts-pop', style:'display:flex;flex-direction:column;gap:12px'},
-    h('h2', {text:'⚠ มีงานค้างที่ต้องดู'}),
+    nts.length ? [h('h2', {text:'📌 จากเจ้าของบริษัท'}),
+      h('div', {class:'latelist'}, nts.map(function(p){ return h('div', {class:'lateitem'},
+        h('div', {style:'min-width:0'}, h('button', {class:'pn', type:'button', text:p.name, onclick:function(){ closeDlg(); openDetail(p.id, true); }}),
+          noticeItems(p).map(function(x){ return h('p', {class:'small', text:noticeText(x)}); })),
+        h('span', {class:'badge late', text:'รอรับทราบ'})); })),
+      h('button', {class:'btn sm', type:'button', style:'align-self:flex-start', text:'ไปกดรับทราบ', onclick:function(){ closeDlg(); S.tabM = 'invites'; render(); }})] : null,
+    alertCount(r) ? h('h2', {text:'⚠ มีงานค้างที่ต้องดู'}) : null,
     items.length ? h('div', {class:'latelist'}, items.slice(0, MAXN).map(lateRow)) : null,
     items.length > MAXN ? h('p', {class:'small muted', text:'และอีก ' + (items.length - MAXN) + ' รายการ'}) : null,
     S.role !== 'owner' && r.stale.length ? [h('h3', {text:'ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}), h('div', {class:'latelist'}, r.stale.slice(0, MAXN).map(staleRow))] : null,
-    h('div', {class:'row'}, h('button', {class:'btn primary', type:'button', text:'ดูหน้างานค้าง', onclick:function(){ closeDlg(); goLate(); }}),
+    h('div', {class:'row'}, alertCount(r) ? h('button', {class:'btn primary', type:'button', text:'ดูหน้างานค้าง', onclick:function(){ closeDlg(); goLate(); }}) : null,
       h('button', {class:'btn', type:'button', text:'ปิด', onclick:closeDlg}))));
   d.showModal();
 }
@@ -736,6 +745,38 @@ function tabBar(items, cur, set){
   }));
 }
 /* Compact card: the essentials only. Clicking it opens the full detail in a large pop-up. */
+/* ---------- what the company owner gave or changed, waiting for the main responsible person to acknowledge ---------- */
+function noticeItems(p){ return (p.notice && p.notice.items) || []; }
+function noticeText(x){
+  if(x.event === 'assign') return 'เจ้าของบริษัทมอบโปรเจกต์นี้ให้คุณเป็นผู้รับผิดชอบหลัก';
+  var o = {}; try{ o = JSON.parse(x.note || '{}') || {}; }catch(e){}
+  var parts = [];
+  if('deadline' in o) parts.push('กำหนดเสร็จ (เดิม ' + (o.deadline ? dlText(o.deadline) : '-') + ')');
+  if('details' in o) parts.push('รายละเอียด');
+  return 'เจ้าของบริษัทแก้' + (parts.join(' และ ') || 'ข้อมูล');
+}
+function myNotices(){ return (S.projects || []).filter(function(p){ return p.isCreator && noticeItems(p).length; }); }
+/* one line on the card: for the main person "new from the owner", for the owner who has / has not acknowledged */
+function noticeLine(p){
+  var it = noticeItems(p);
+  if(S.role === 'owner'){
+    if(it.length) return h('p', {class:'small warn', text:'รอ ' + p.ownerName + ' รับทราบสิ่งที่คุณมอบ/แก้ไข'});
+    if(p.notice && p.notice.ackAt) return h('p', {class:'small ok', text:p.notice.ackBy + ' รับทราบแล้ว ' + fmt(p.notice.ackAt)});
+    return null;
+  }
+  if(!p.isCreator || !it.length) return null;
+  return h('p', {class:'small'}, h('span', {class:'badge late', text:it.some(function(x){ return x.event === 'assign'; }) ? 'ใหม่จากเจ้าของบริษัท' : 'เจ้าของบริษัทแก้ไข'}), ' รอคุณกดรับทราบ');
+}
+/* card in the "รอรับทราบ" tab */
+function noticeCard(p){
+  return h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
+    h('div', {style:'display:flex;flex-direction:column;gap:4px;min-width:0'}, h('p', {}, h('b', {text:'โปรเจกต์ "' + p.name + '"'})),
+      noticeItems(p).map(function(x){ return h('p', {class:'small', text:'• ' + noticeText(x) + ' · ' + fmt(x.at)}); }),
+      h('p', {class:'small muted', text:'กำหนดเสร็จตอนนี้: ' + (p.deadline ? dlText(p.deadline) : '-')})),
+    h('div', {class:'row'},
+      actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'noticeAck', id:p.id}); }),
+      h('button', {class:'btn sm', type:'button', text:'เปิดโปรเจกต์', onclick:function(){ openDetail(p.id, true); }}))));
+}
 function projectCard(p, mine){
   var k = keyOf(p), a = p.approval || {};
   var cs = p.comments || [];
@@ -754,7 +795,8 @@ function projectCard(p, mine){
     deadlineRow(p),
     h('p', {class:'small clamp1'}, h('b', {text:'ผู้รับผิดชอบ: '}), p.ownerName + (mine && !p.isCreator ? ' (โปรเจกต์ร่วม)' : '') + (co.length ? ' · ร่วม: ' + co.join(', ') : '')),
     p.issue ? h('p', {class:'warn clamp1', text:'ปัญหา: ' + p.issue}) : null,
-    pend ? h('p', {class:'small warn'}, 'คอมเมนต์' + (S.role === 'owner' ? 'รอรับทราบ ' : 'ที่ยังไม่รับทราบ '), h('span', {class:'dot', text:String(pend)})) : null);
+    pend ? h('p', {class:'small warn'}, 'คอมเมนต์' + (S.role === 'owner' ? 'รอรับทราบ ' : 'ที่ยังไม่รับทราบ '), h('span', {class:'dot', text:String(pend)})) : null,
+    noticeLine(p));
   function open(){ openDetail(p.id, mine); }
   card.addEventListener('click', open);
   card.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
@@ -1063,7 +1105,7 @@ function timelineList(p){
   var items = (p.history || []).slice().sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
-    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null,
+    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' || e.event === 'owner-edit' ? editDetail(e) : null,
       /^(turn-report|task-request|task-pass|task-done|task-brief|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
       /^(task-request|task-pass|task-done|task-brief|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
@@ -1087,7 +1129,7 @@ function managerView(al){
     {key:'turn', label:'งานที่รอฉัน', count:myTurn.length},
     {key:'late', label:'งานค้าง', count:al.late.length + al.soon.length},
     {key:'msgs', label:'ข้อความจากเจ้าของบริษัท', count:needCount},
-    {key:'invites', label:'รอรับทราบ', count:S.invites.length + S.handoverInvites.length},
+    {key:'invites', label:'รอรับทราบ', count:S.invites.length + S.handoverInvites.length + myNotices().length},
     {key:'fix', label:'รอแก้ไข', count:returned.length}
   ], S.tabM, function(k){ S.tabM = k; render(); }));
   if(S.tabM === 'late'){ box.appendChild(lateView(al)); return box; }
@@ -1098,7 +1140,9 @@ function managerView(al){
     return box;
   }
   if(S.tabM === 'invites'){
-    if(!S.invites.length && !S.handoverInvites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
+    var nts = myNotices();
+    if(!S.invites.length && !S.handoverInvites.length && !nts.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
+    nts.forEach(function(p){ box.appendChild(noticeCard(p)); });
     S.handoverInvites.forEach(function(iv){
       box.appendChild(h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
         h('div', {}, h('p', {text:iv.by + ' ขอโอนความรับผิดชอบหลักของโปรเจกต์ "' + iv.name + '" ให้คุณ'}),
