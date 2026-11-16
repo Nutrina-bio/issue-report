@@ -67,7 +67,15 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .thumb{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg);cursor:pointer}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb .x{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
+.problem .cm{border-left-color:var(--late);background:var(--late-bg);border-radius:0 6px 6px 0;padding:6px 10px}
 .files{display:flex;flex-wrap:wrap;gap:6px}
+#dlg.wide{width:min(960px,calc(100vw - 32px));max-width:none}
+.fpv{display:flex;flex-direction:column;gap:12px}
+.fpv-name{font-size:16px;overflow-wrap:anywhere}
+.fpv-body{min-height:80px}
+.fpv-img{max-width:100%;max-height:75vh;display:block;margin:0 auto;border-radius:8px}
+.fpv-frame{width:100%;height:75vh;border:1px solid var(--line);border-radius:8px;background:#fff}
+.fpv-text{max-height:70vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:0}
 .files:empty{display:none}
 .filechip{display:inline-flex;align-items:center;gap:2px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .filechip .file{border:0;background:none;color:inherit;font:inherit;font-size:13px;padding:6px 8px;cursor:pointer;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
@@ -246,9 +254,36 @@ function openFile(f, btn){
     }catch(x){ toast('เปิดไฟล์ไม่ได้'); }
   });
 }
+/* preview in a pop-up: PDF, photos, TXT and CSV are shown; other types show name, size and the download button */
+function fileKind(name){
+  var ext = (/\.([a-z0-9]+)$/i.exec(name || '') || ['', ''])[1].toLowerCase();
+  return /^(jpe?g|png)$/.test(ext) ? 'image' : ext === 'pdf' ? 'pdf' : /^(txt|csv)$/.test(ext) ? 'text' : '';
+}
+function previewFile(f){
+  var d = $('#dlg'), kind = fileKind(f.name), body = h('div', {class:'fpv-body'});
+  var dl = h('button', {class:'btn primary', type:'button', text:'ดาวน์โหลด'}); dl.addEventListener('click', function(){ openFile(f, dl); });
+  d.replaceChildren(h('div', {class:'fpv'},
+    h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;gap:8px'},
+      h('div', {style:'min-width:0'}, h('h2', {class:'fpv-name', text:f.name}), h('p', {class:'small muted', text:f.size ? sizeText(f.size) : ''})),
+      h('div', {class:'row', style:'flex:none'}, dl, h('button', {class:'btn', type:'button', text:'ปิด', onclick:closeDlg}))),
+    body));
+  d.classList.add('wide'); d.addEventListener('close', function un(){ d.classList.remove('wide'); d.removeEventListener('close', un); });
+  d.showModal();
+  if(!kind){ body.appendChild(h('p', {class:'muted', text:'ไฟล์ชนิดนี้เปิดดูบนหน้าเว็บไม่ได้ กด "ดาวน์โหลด" เพื่อเปิดในเครื่อง'})); return; }
+  body.appendChild(h('p', {class:'muted', text:'กำลังโหลด...'}));
+  call({action:'file', id:f.id, inline:true}).then(async function(j){
+    if(!j.ok){ body.replaceChildren(h('p', {class:'err', text:errText(j, 'เปิดไฟล์ไม่ได้')})); return; }
+    if(kind === 'image') body.replaceChildren(h('img', {src:j.data, alt:f.name, class:'fpv-img'}));
+    else if(kind === 'pdf') body.replaceChildren(h('iframe', {src:j.data, title:f.name, class:'fpv-frame'}));
+    else {
+      var t = await (await fetch(j.data)).text();
+      body.replaceChildren(h('pre', {class:'fpv-text', text:t.length > 200000 ? t.slice(0, 200000) + '\n… (แสดงแค่ส่วนต้น ดาวน์โหลดเพื่อดูทั้งไฟล์)' : t}));
+    }
+  }).catch(function(){ body.replaceChildren(h('p', {class:'err', text:'เปิดไฟล์ไม่ได้ ลองกดดาวน์โหลด'})); });
+}
 function fileChip(f, onRemove){
   var b = h('button', {class:'file', type:'button', title:f.name, text:'📎 ' + f.name + (f.size ? ' (' + sizeText(f.size) + ')' : '')});
-  if(!onRemove) b.addEventListener('click', function(){ openFile(f, b); });
+  if(!onRemove) b.addEventListener('click', function(){ previewFile(f); });
   return h('span', {class:'filechip'}, b, onRemove ? h('button', {class:'x', type:'button', 'aria-label':'ลบไฟล์ ' + f.name, text:'×', onclick:onRemove}) : null);
 }
 function filesEl(files){ return files && files.length ? h('div', {class:'files'}, files.map(function(f){ return fileChip(f, null); })) : null; }
@@ -401,6 +436,9 @@ var EVT = {
   // step-done / step-request notes are JSON {step, for, text, images, files}; older ones are plain text
   'step-done':function(e){ var o = editOld(e); return o.step ? 'เสร็จ ' + o.step + (o.for ? ' (แทน ' + o.for + ')' : '') + (o.text ? ' — สรุปงาน: ' + o.text : '') : 'เสร็จ ' + e.note; },
   'step-reopen':function(e){ return 'ย้อนกลับมาทำใหม่ ' + e.note; },
+  'step-problem':function(e){ var o = editOld(e); return '⚠ แจ้งปัญหา ' + (o.step || '') + ': ' + (o.text || ''); },
+  'step-solved':function(e){ return 'ปิดปัญหา ' + e.note; },
+  'step-insert':function(e){ return 'แทรกขั้นใหม่ ' + e.note; },
   turn:function(e){ return e.note; },
   'task-add':function(e){ return 'แจกงานให้ ' + e.note; },
   'task-edit':function(e){ return 'แก้ใบงาน: ' + e.note; },
@@ -448,6 +486,7 @@ function workLine(p){
     if(!c) return h('p', {class:'small ok', text:'✔ ครบทุกขั้นตอน (' + st.length + ' ขั้น)'});
     var waiting = c.assignees.filter(function(a){ return !a.doneAt; }).map(function(a){ return a.name; });
     return h('p', {class:'small clamp1 work'}, h('b', {text:'▶ ขั้นที่ ' + (p.currentStep + 1) + '/' + st.length + ': '}), c.title + ' · ' + (waiting.length ? 'รอ: ' + waiting.join(', ') : 'ทำครบแล้ว') + ' · ภายใน ' + dlText(c.due) + ' ',
+      c.problem ? h('span', {class:'badge late', text:'⚠ ติดปัญหา'}) : null, c.problem ? ' ' : null,
       c.approval.state === 'pending' ? pendingBadge() : c.approval.state === 'returned' ? h('span', {class:'badge late', text:'ถูกส่งกลับ'}) : dueBadge(c.due, keyOf(p) === 'done'));
   }
   var all = p.tasks || [], open = openTasks(p);
@@ -647,8 +686,13 @@ function stepsList(p, mine){
       if(me && !me.doneAt) actions.push(h('button', {class:'btn sm primary', type:'button', text:'เสร็จส่วนของฉัน', onclick:function(){ stepDoneDialog(p, x, i, ''); }}));
       if(p.isCreator) x.assignees.forEach(function(a){ if(!a.doneAt && a.id !== S.id) actions.push(h('button', {class:'btn sm', type:'button', text:'เสร็จแทน ' + a.name, onclick:function(){ stepDoneDialog(p, x, i, a.id, a.name); }})); });
       if(allParts && x.approval.state === 'returned' && (me || p.isCreator)) actions.push(h('button', {class:'btn sm primary', type:'button', text:'ขออนุมัติใหม่', onclick:function(){ stepDoneDialog(p, x, i, '', '', 'request'); }}));
+      if(!x.problem && (me || p.isCreator)) actions.push(h('button', {class:'btn sm danger', type:'button', text:'แจ้งปัญหา', onclick:function(){ stepDoneDialog(p, x, i, '', '', 'problem'); }}));
+      if(x.problem && p.isCreator){
+        actions.push(h('button', {class:'btn sm primary', type:'button', text:'แทรกขั้นแก้ไข', onclick:function(){ insertStepDialog(p, x, i); }}));
+        actions.push(h('button', {class:'btn sm', type:'button', text:'แก้แล้ว', onclick:function(){ noteDialog('ปิดปัญหา ขั้นที่ ' + (i + 1) + ': ' + x.title, 'แก้อย่างไร', true, function(note){ return call({action:'stepSolve', id:p.id, sid:x.sid, note:note}); }); }}));
+      }
     }
-    if(done && mine && p.isCreator) actions.push(actBtn('ย้อนกลับ', 'sm', 'กำลังบันทึก...', function(){ return call({action:'stepReopen', id:p.id, sid:x.sid}); }));
+    if(done && mine && p.isCreator) actions.push(h('button', {class:'btn sm', type:'button', text:'ย้อนกลับ', onclick:function(){ noteDialog('ย้อนกลับขั้นที่ ' + (i + 1) + ': ' + x.title, 'เหตุผลที่ต้องทำใหม่', true, function(note){ return call({action:'stepReopen', id:p.id, sid:x.sid, reason:note}); }); }}));
     return h('li', {class:'step' + (done ? ' done' : cur ? ' cur' : '')},
       h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
         h('div', {style:'display:flex;flex-direction:column;gap:4px'}, h('b', {text:(done ? '✔ ' : cur ? '▶ ' : '') + (i + 1) + '. ' + x.title}),
@@ -657,6 +701,7 @@ function stepsList(p, mine){
             a.doneAt && (a.note || (a.images || []).length || (a.files || []).length) ? reportView({text:a.note, images:a.images, files:a.files}) : null]; }),
           approvalLine(x.approval, x.needApproval),
           x.request && !done ? reportView(x.request, 'ขออนุมัติใหม่โดย ' + x.request.by + ' · ' + fmt(x.request.at)) : null,
+          x.problem ? h('div', {class:'problem'}, reportView(x.problem, '⚠ ติดปัญหา · แจ้งโดย ' + x.problem.by + ' · ' + fmt(x.problem.at) + (p.isCreator ? '' : ' · รอผู้รับผิดชอบหลักแก้'))) : null,
           cur && x.approval.state === 'pending' ? ownerDecide('step', p, 'sid', x.sid) : null),
         h('div', {class:'row', style:'flex:none'}, actions)));
   }))];
@@ -715,18 +760,19 @@ function noteDialog(title, label, required, send){
     h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
   d.showModal();
 }
-/* a step report, like a task report: kind = done (finish my part, or someone's part as the main owner) or request (ask again after a return) */
+/* a step report, like a task report: kind = done (finish my part, or someone's part as the main owner),
+   request (ask again after a return) or problem (tell the main responsible person something is wrong) */
 function stepDoneDialog(p, x, i, who, whoName, kind){
   kind = kind || 'done';
   var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
-  var note = h('textarea', {id:'sd-note', maxlength:1000, style:'min-height:80px', placeholder:kind === 'request' ? 'เช่น ถ่ายรูปหลังติดตั้งเพิ่มแล้ว' : 'เช่น ติดตั้งฝั่งซ้ายเสร็จ ทดสอบแล้วไม่รั่ว'});
+  var note = h('textarea', {id:'sd-note', maxlength:1000, style:'min-height:80px', placeholder:{request:'เช่น ถ่ายรูปหลังติดตั้งเพิ่มแล้ว', problem:'เช่น อะไหล่ที่ได้มาผิดรุ่น ซีล 22 มม. แต่เครื่องใช้ 25 มม.', done:'เช่น ติดตั้งฝั่งซ้ายเสร็จ ทดสอบแล้วไม่รั่ว'}[kind]});
   var att = attachBox();
-  var go = h('button', {class:'btn primary', type:'button', text:kind === 'request' ? 'ขออนุมัติใหม่' : 'ยืนยันว่าเสร็จ'});
+  var go = h('button', {class:'btn primary', type:'button', text:{request:'ขออนุมัติใหม่', problem:'แจ้งปัญหา', done:'ยืนยันว่าเสร็จ'}[kind]});
   go.addEventListener('click', function(){
     err.textContent = '';
-    if(!note.value.trim()){ err.textContent = ERR.noreport; return; }
-    var body = kind === 'request' ? {action:'stepRequest', id:p.id, sid:x.sid, note:note.value, images:att.images, files:att.files}
-      : {action:'stepDone', id:p.id, sid:x.sid, note:note.value, who:who || '', images:att.images, files:att.files};
+    if(!note.value.trim()){ err.textContent = kind === 'problem' ? 'เขียนว่าเจอปัญหาอะไร' : ERR.noreport; return; }
+    var body = kind === 'done' ? {action:'stepDone', id:p.id, sid:x.sid, note:note.value, who:who || '', images:att.images, files:att.files}
+      : {action:kind === 'request' ? 'stepRequest' : 'stepProblem', id:p.id, sid:x.sid, note:note.value, images:att.images, files:att.files};
     withBusy(go, 'กำลังบันทึก...', async function(){
       try{ var j = await call(body); if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
       catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
@@ -734,15 +780,47 @@ function stepDoneDialog(p, x, i, who, whoName, kind){
   });
   var after;
   if(kind === 'request') after = 'เจ้าของบริษัทส่งกลับ: ' + (x.approval.note || '-') + ' · สรุป รูป และไฟล์นี้จะไปให้เจ้าของบริษัทดูอีกครั้ง';
+  else if(kind === 'problem') after = p.isCreator ? 'ขั้นนี้จะขึ้นป้าย "ติดปัญหา" จนกว่าคุณจะแทรกขั้นแก้ไขหรือกด "แก้แล้ว"'
+    : 'ขั้นนี้จะขึ้นป้าย "ติดปัญหา" และไปอยู่ในแท็บ "งานที่รอฉัน" ของ ' + p.ownerName + ' (ผู้รับผิดชอบหลัก) ให้ตัดสินใจว่าจะแก้อย่างไร';
   else {
     var left = x.assignees.filter(function(a){ return !a.doneAt && a.id !== (who || S.id); }).map(function(a){ return a.name; });
     var next = (p.steps || [])[i + 1];
     after = left.length ? 'ยังรอ ' + left.join(', ') + ' ทำส่วนของตัวเอง' : x.needApproval ? 'ทุกคนครบแล้ว ขั้นนี้จะไปรอเจ้าของบริษัทอนุมัติ' : next ? 'ขั้นต่อไป "' + next.title + '" จะไปขึ้นที่ ' + next.assignees.map(function(a){ return a.name; }).join(', ') : 'นี่คือขั้นสุดท้าย โปรเจกต์จะเป็น "เสร็จสิ้น"';
   }
   d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
-    h('h2', {text:(kind === 'request' ? 'ขออนุมัติใหม่ ขั้นที่ ' : 'เสร็จขั้นที่ ') + (i + 1) + ': ' + x.title + (who ? ' (แทน ' + whoName + ')' : '')}),
+    h('h2', {text:{request:'ขออนุมัติใหม่ ขั้นที่ ', problem:'แจ้งปัญหา ขั้นที่ ', done:'เสร็จขั้นที่ '}[kind] + (i + 1) + ': ' + x.title + (who ? ' (แทน ' + whoName + ')' : '')}),
     h('p', {class:'small muted', text:after}),
-    h('div', {class:'field'}, h('label', {for:'sd-note', text:(kind === 'request' ? 'แก้อะไรไปแล้ว' : who ? 'สรุปงานที่ ' + whoName + ' ทำ' : 'สรุปงานที่คุณทำ') + ' (ต้องกรอก)'}), note, att.el), err,
+    h('div', {class:'field'}, h('label', {for:'sd-note', text:(kind === 'request' ? 'แก้อะไรไปแล้ว' : kind === 'problem' ? 'เจอปัญหาอะไร' : who ? 'สรุปงานที่ ' + whoName + ' ทำ' : 'สรุปงานที่คุณทำ') + ' (ต้องกรอก)'}), note, att.el), err,
+    h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
+  d.showModal();
+}
+/* main responsible person: put a new step right before the current one (e.g. to fix a reported problem) */
+function insertStepDialog(p, x, i){
+  var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
+  var title = h('input', {type:'text', id:'is-title', maxlength:120, placeholder:'เช่น เปลี่ยน/สั่งอะไหล่ให้ถูกรุ่น'});
+  var due = h('input', {type:'date', id:'is-due', min:'2000-01-01', max:'2100-12-31'});
+  var people = peopleOf(p), boxes = people.map(function(m){ var cb = h('input', {type:'checkbox', value:m.id, 'aria-label':'แทรกขั้น ' + m.name}); return {cb:cb, el:h('label', {}, cb, m.name)}; });
+  var need = h('input', {type:'checkbox', id:'is-need'});
+  var go = h('button', {class:'btn primary', type:'button', text:'แทรกขั้น'});
+  go.addEventListener('click', function(){
+    err.textContent = '';
+    var who = boxes.filter(function(b){ return b.cb.checked; }).map(function(b){ return b.cb.value; });
+    if(!title.value.trim() || !due.value || !who.length){ err.textContent = ERR.badstep; return; }
+    if(p.deadline && due.value > p.deadline){ err.textContent = ERR.stepdue; return; }
+    withBusy(go, 'กำลังบันทึก...', async function(){
+      try{ var j = await call({action:'stepInsert', id:p.id, sid:x.sid, step:{title:title.value, due:due.value, assignees:who, needApproval:need.checked}});
+        if(j.ok){ closeDlg(); toast('แทรกขั้นแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
+      catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    });
+  });
+  d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
+    h('h2', {text:'แทรกขั้นก่อนขั้นที่ ' + (i + 1) + ': ' + x.title}),
+    h('p', {class:'small muted', text:'ขั้นใหม่จะเป็นขั้นที่ ' + (i + 1) + ' และต้องเสร็จก่อนจึงจะกลับมาทำ "' + x.title + '" ต่อ' + (x.problem ? ' · ปัญหาที่แจ้งไว้จะถูกปิดพร้อมกัน' : '') + ' ส่วนที่คนกดเสร็จไว้แล้วในขั้นเดิมยังอยู่'}),
+    x.problem ? reportView(x.problem, 'ปัญหาที่แจ้งโดย ' + x.problem.by) : null,
+    h('div', {class:'field'}, h('label', {for:'is-title', text:'ชื่อขั้น'}), title),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'ผู้รับผิดชอบ'}), h('div', {class:'checks'}, boxes.map(function(b){ return b.el; }))),
+    h('div', {class:'field'}, h('label', {for:'is-due', text:'ต้องเสร็จภายใน' + (p.deadline ? ' (ไม่เกิน ' + dlText(p.deadline) + ')' : '')}), due),
+    h('label', {class:'row', style:'font-weight:400;gap:8px'}, need, 'ต้องให้เจ้าของบริษัทอนุมัติ (เช่น มีค่าใช้จ่ายเพิ่ม)'), err,
     h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
   d.showModal();
 }
@@ -822,8 +900,8 @@ function timelineList(p){
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
     return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null,
-      /^(turn-report|task-request|task-pass|task-done|step-done|step-request)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
-      /^(task-request|task-pass|task-done|step-done|step-request)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
+      /^(turn-report|task-request|task-pass|task-done|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
+      /^(task-request|task-pass|task-done|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
