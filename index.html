@@ -316,8 +316,8 @@ function readB64(file){
   return new Promise(function(resolve, reject){ var r = new FileReader(); r.onerror = reject; r.onload = function(){ resolve(String(r.result).split(',')[1] || ''); }; r.readAsDataURL(file); });
 }
 /* photo and file pickers for a report; .images and .files hold what was uploaded */
-function attachBox(){
-  var box = {images:[], files:[]};
+function attachBox(init){
+  var box = {images:init && init.images ? init.images.slice() : [], files:init && init.files ? init.files.slice() : []};
   var thumbs = h('div', {class:'thumbs'}), flist = h('div', {class:'files'});
   function draw(){
     thumbs.replaceChildren.apply(thumbs, box.images.map(function(id, i){ return thumbEl(id, true, function(){ box.images.splice(i, 1); draw(); }); }));
@@ -352,6 +352,7 @@ function attachBox(){
       }
     });
   });
+  draw();
   box.el = [thumbs, flist, h('div', {class:'row'}, pickImg, pickFile), h('p', {class:'small muted', text:'รูปไม่เกิน ' + MAX_IMG + ' รูป · ไฟล์ไม่เกิน ' + MAX_FILES + ' ไฟล์ ไฟล์ละไม่เกิน ' + MAX_FILE_MB + ' MB (PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP, JPG, PNG)'}), imgIn, fileIn];
   return box;
 }
@@ -465,6 +466,7 @@ var EVT = {
   turn:function(e){ return e.note; },
   'task-add':function(e){ return 'แจกงานให้ ' + e.note; },
   'task-edit':function(e){ return 'แก้ใบงาน: ' + e.note; },
+  'task-brief':function(e){ var o = editOld(e); return 'ไฟล์แนบของใบงาน "' + (o.title || '') + '"'; },
   'task-cancel':function(e){ return 'ยกเลิกใบงานของ ' + e.note; },
   'task-request':function(e){ var o = editOld(e); return 'ขออนุมัติใบงาน "' + (o.title || '') + '": ' + (o.text || ''); },
   'task-approved':function(e){ return 'เจ้าของบริษัทอนุมัติใบงานของ ' + e.note; },
@@ -861,13 +863,14 @@ function tasksList(p, mine){
       acts.push(h('button', {class:'btn sm danger', type:'button', text:'ยกเลิก', onclick:function(){ noteDialog('ยกเลิกใบงานของ ' + t.toName, 'เหตุผล', true, function(note){ return call({action:'taskCancel', id:p.id, tid:t.tid, reason:note}); }); }}));
     }
     var chain = t.chain && t.chain.length ? h('details', {}, h('summary', {class:'small', text:'ประวัติการส่งต่อ (' + t.chain.length + ')'}),
-      t.chain.map(function(c){ return h('div', {class:'cm', style:'margin-top:6px'}, h('p', {class:'small muted', text:c.from + ' → ' + c.toName + ' · ' + fmt(c.at)}), h('p', {class:'small', text:'งานเดิม: ' + c.title}), h('p', {class:'small', text:'สรุป: ' + c.report}),
+      t.chain.map(function(c){ return h('div', {class:'cm', style:'margin-top:6px'}, h('p', {class:'small muted', text:c.from + ' → ' + c.toName + ' · ' + fmt(c.at)}), h('p', {class:'small', text:'งานเดิม: ' + c.title}), c.brief ? reportView({images:c.brief.images, files:c.brief.files}, 'แนบมากับงานเดิม') : null, h('p', {class:'small', text:'สรุป: ' + c.report}),
         c.images && c.images.length ? h('div', {class:'thumbs'}, c.images.map(function(id){ return thumbEl(id, false); })) : null, filesEl(c.files)); })) : null;
     return h('li', {class:'step' + (open ? (t.to === S.id ? ' cur' : '') : ' done')},
       h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
         h('div', {style:'display:flex;flex-direction:column;gap:4px;min-width:0'},
           h('b', {text:(t.status === 'done' ? '✔ ' : t.status === 'cancelled' ? '✕ ' : '▶ ') + t.toName + ': ' + t.title}),
           h('p', {class:'small'}, 'ภายใน ' + dlText(t.due) + ' · ' + (t.chain && t.chain.length ? 'ส่งต่อโดย ' : 'แจกโดย ') + t.by + ' ', open ? dueBadge(t.due, false) : null),
+          t.brief ? h('div', {class:'brief'}, reportView({images:t.brief.images, files:t.brief.files}, 'แนบมากับใบงาน')) : null,
           t.status === 'done' ? h('p', {class:'small ok', text:'เสร็จ ' + fmt(t.doneAt) + ' โดย ' + t.doneBy}) : null,
           t.status === 'cancelled' ? h('p', {class:'small muted', text:'ยกเลิกแล้ว: ' + t.cancelReason}) : null,
           open ? approvalLine(t.approval, t.needApproval) : null,
@@ -969,13 +972,14 @@ function taskDialog(p, t){
   var due = h('input', {type:'date', id:'tk-due', min:'2000-01-01', max:'2100-12-31', value:t ? t.due : ''});
   var need = h('input', {type:'checkbox', id:'tk-need'}); need.checked = !!(t && t.needApproval);
   var reason = h('textarea', {id:'tk-reason', maxlength:300, style:'min-height:48px'});
+  var att = attachBox(t && t.brief);
   var go = h('button', {class:'btn primary', type:'button', text:t ? 'บันทึก' : 'แจกงาน'});
   go.addEventListener('click', function(){
     err.textContent = '';
     if(!to.value || !title.value.trim() || !due.value){ err.textContent = ERR.badtask; return; }
     if(p.deadline && due.value > p.deadline){ err.textContent = 'วันที่ต้องไม่เกินกำหนดเสร็จของโปรเจกต์'; return; }
     if(t && !reason.value.trim()){ err.textContent = 'ใส่เหตุผลที่แก้ใบงาน'; return; }
-    var task = {to:to.value, title:title.value, due:due.value, needApproval:need.checked};
+    var task = {to:to.value, title:title.value, due:due.value, needApproval:need.checked, images:att.images, files:att.files};
     withBusy(go, 'กำลังบันทึก...', async function(){
       try{ var j = await call(t ? {action:'taskEdit', id:p.id, tid:t.tid, task:task, reason:reason.value} : {action:'taskAdd', id:p.id, task:task});
         if(j.ok){ closeDlg(); toast(t ? 'แก้ใบงานแล้ว' : 'แจกงานแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
@@ -985,7 +989,7 @@ function taskDialog(p, t){
   d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
     h('h2', {text:t ? 'แก้ใบงาน' : 'แจกงาน: ' + p.name}),
     h('div', {class:'field'}, h('label', {for:'tk-to', text:'ให้ใครทำ'}), to),
-    h('div', {class:'field'}, h('label', {for:'tk-title', text:'ให้ทำอะไร'}), title),
+    h('div', {class:'field'}, h('label', {for:'tk-title', text:'ให้ทำอะไร'}), title, h('span', {class:'small muted', text:'แนบรูปหรือไฟล์ประกอบได้ (ไม่บังคับ) เช่น แบบ ใบเสนอราคา รูปหน้างาน'}), att.el),
     h('div', {class:'field'}, h('label', {for:'tk-due', text:'ต้องเสร็จภายใน' + (p.deadline ? ' (ไม่เกิน ' + dlText(p.deadline) + ')' : '')}), due),
     h('label', {class:'row', style:'font-weight:400;gap:8px'}, need, 'ต้องให้เจ้าของบริษัทอนุมัติก่อนส่งต่อหรือปิดงาน'),
     t ? h('div', {class:'field'}, h('label', {for:'tk-reason', text:'เหตุผลที่แก้ (ต้องกรอก)'}), reason) : null, err,
@@ -1034,8 +1038,8 @@ function timelineList(p){
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
     return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null,
-      /^(turn-report|task-request|task-pass|task-done|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
-      /^(task-request|task-pass|task-done|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
+      /^(turn-report|task-request|task-pass|task-done|task-brief|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
+      /^(task-request|task-pass|task-done|task-brief|step-done|step-request|step-problem)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
