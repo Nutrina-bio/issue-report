@@ -79,6 +79,12 @@ dialog.big{width:min(920px,calc(100vw - 24px));max-height:92vh;min-height:min(56
 .pd-body{padding:16px 18px 20px;display:flex;flex-direction:column;gap:12px}
 .card.click{cursor:pointer}.card.click:hover{border-color:var(--accent)}
 .clamp1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.steprow{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:6px;align-items:center}
+@media (max-width:640px){.steprow{grid-template-columns:auto 1fr;}.steprow > select,.steprow > input[type=date],.steprow > .row{grid-column:2}}
+ol.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+ol.steps li{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+ol.steps li.cur{border-color:var(--accent);background:var(--bg)}
+ol.steps li.done{opacity:.8}
 .cover{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--bg);border:1px solid var(--line)}
 ul.tl{list-style:none;margin:0;padding:0}
 ul.tl li{padding:0 0 12px 18px;border-left:2px solid var(--line);margin-left:5px;position:relative;font-size:.92rem}
@@ -110,7 +116,7 @@ var ST = {
 var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
-var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
+var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
 var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], handoverInvites:[], adminProjects:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
@@ -127,8 +133,11 @@ function h(tag, attrs){
   for(var i = 2; i < arguments.length; i++){
     var c = arguments[i];
     if(c == null || c === false) continue;
-    if(Array.isArray(c)) c.forEach(function(x){ if(x) el.appendChild(typeof x === 'string' ? document.createTextNode(x) : x); });
-    else el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    (function add(x){ // children may be nested arrays
+      if(x == null || x === false || x === '') return;
+      if(Array.isArray(x)) x.forEach(add);
+      else el.appendChild(typeof x === 'string' ? document.createTextNode(x) : x);
+    })(c);
   }
   return el;
 }
@@ -314,6 +323,11 @@ var EVT = {
   'handover-cancel':function(e){ return e.note; },
   'handover-decline':function(e){ return e.note; },
   handover:function(e){ return 'โอนความรับผิดชอบหลักแล้ว ' + e.note; },
+  mode:function(e){ return 'เปลี่ยนเป็น' + (MODE[e.note] || e.note); },
+  steps:function(e){ return 'ตั้งขั้นตอนงาน (' + e.note + ' ขั้น)'; },
+  'step-done':function(e){ return 'เสร็จ ' + e.note; },
+  'step-reopen':function(e){ return 'ย้อนกลับมาทำใหม่ ' + e.note; },
+  turn:function(e){ return e.note; },
   edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); }
 };
 var EDIT_LBL = {name:'ชื่อโปรเจกต์', details:'รายละเอียด', issue:'ปัญหา', label:'สถานที่', deadline:'กำหนดเสร็จ', images:'รูป'};
@@ -326,8 +340,36 @@ function dlDays(p){ /* days left (negative = overdue); null when no deadline */
   return Math.round((d - t) / 86400000);
 }
 function isOverdue(p){ var n = dlDays(p); return n !== null && n < 0 && keyOf(p) !== 'done'; }
+function dueBadge(s, done){ /* badge for any YYYY-MM-DD due date */
+  var d = dlDate(s); if(!d || done) return null;
+  var t = new Date(); t = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  var n = Math.round((d - t) / 86400000);
+  if(n < 0) return h('span', {class:'badge late', text:'เกินกำหนด ' + (-n) + ' วัน'});
+  if(n === 0) return h('span', {class:'badge risk', text:'ครบกำหนดวันนี้'});
+  if(n <= 3) return h('span', {class:'badge risk', text:'เหลือ ' + n + ' วัน'});
+  return null;
+}
+var MODE = {steps:'แบบขั้นตอน', handoff:'แบบส่งต่อ'};
+function modeOf(p){ return p.mode === 'steps' ? 'steps' : 'handoff'; }
+function curStep(p){ var st = p.steps || []; return p.currentStep >= 0 && st[p.currentStep] ? st[p.currentStep] : null; }
+/* One line saying whose turn it is now, for the card and the pop-up. */
+function workLine(p){
+  if(modeOf(p) === 'steps'){
+    var st = p.steps || [], c = curStep(p);
+    if(!st.length) return null;
+    if(!c) return h('p', {class:'small ok', text:'✔ ครบทุกขั้นตอน (' + st.length + ' ขั้น)'});
+    return h('p', {class:'small clamp1 work'}, h('b', {text:'▶ ขั้นที่ ' + (p.currentStep + 1) + '/' + st.length + ': '}), c.title + ' · รอ: ' + c.assigneeName + ' · ภายใน ' + dlText(c.due) + ' ', dueBadge(c.due, keyOf(p) === 'done'));
+  }
+  if(!p.turn) return null;
+  return h('p', {class:'small clamp1 work'}, h('b', {text:'ตอนนี้ถึงตา: '}), p.turn.toName + (p.turn.due ? ' · ภายใน ' + dlText(p.turn.due) + ' ' : ''), p.turn.due ? dueBadge(p.turn.due, keyOf(p) === 'done') : null);
+}
+function meterFor(p){
+  if(modeOf(p) !== 'steps') return [];
+  return [h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
+    h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '% (' + (p.steps || []).filter(function(x){ return x.doneAt; }).length + '/' + (p.steps || []).length + ' ขั้น)'})];
+}
 function deadlineRow(p){
-  var n = dlDays(p); if(n === null) return null;
+  var n = dlDays(p); if(n === null) return h('p', {class:'small warn', text:'ยังไม่ได้ตั้งกำหนดเสร็จ'});
   var done = keyOf(p) === 'done', badge = null;
   if(!done){
     if(n < 0) badge = h('span', {class:'badge late', text:'เกินกำหนด ' + (-n) + ' วัน'});
@@ -405,14 +447,14 @@ function projectCard(p, mine){
   var cover = null;
   if(p.images && p.images.length){ cover = h('img', {class:'cover', alt:'', loading:'lazy'}); (function(img){ loadImg(p.images[0], function(src){ img.src = src; }); })(cover); }
   var co = (p.coOwners || []).filter(function(c){ return c.state === 'accepted'; }).map(function(c){ return c.name; });
-  var card = h('div', {class:'card click', role:'button', tabindex:'0', 'aria-label':'เปิดรายละเอียดโปรเจกต์ ' + p.name},
+  var card = h('div', {class:'card click' + (p.myTurn ? ' notice' : ''), role:'button', tabindex:'0', 'aria-label':'เปิดรายละเอียดโปรเจกต์ ' + p.name},
     h('div', {class:'row', style:'justify-content:space-between;align-items:flex-start;flex-wrap:nowrap'},
       h('div', {style:'display:flex;flex-direction:column;gap:6px;min-width:0'},
         h('div', {class:'row'}, h('h3', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
         approvalBadge(p) ? h('div', {class:'row'}, approvalBadge(p), a.state === 'approved' && a.editedAfter ? h('span', {class:'warn', text:'แก้ไขหลังอนุมัติ'}) : null) : null),
       cover),
-    h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
-    h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '%'}),
+    meterFor(p),
+    workLine(p),
     deadlineRow(p),
     h('p', {class:'small clamp1'}, h('b', {text:'ผู้รับผิดชอบ: '}), p.ownerName + (mine && !p.isCreator ? ' (โปรเจกต์ร่วม)' : '') + (co.length ? ' · ร่วม: ' + co.join(', ') : '')),
     p.issue ? h('p', {class:'warn clamp1', text:'ปัญหา: ' + p.issue}) : null,
@@ -443,8 +485,10 @@ function drawDetail(){
     h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
       h('div', {class:'row'}, h('h2', {text:p.name}), h('span', {class:'badge ' + ST[k].cls, text:ST[k].label})),
       h('button', {class:'btn sm', type:'button', text:'ปิด', 'aria-label':'ปิดรายละเอียด', onclick:function(){ d.close(); }})),
-    tabBar([{key:'info', label:'รายละเอียด', count:0}, {key:'tl', label:'ไทม์ไลน์', count:(p.history || []).length, plain:true}], S.pd.tab, function(t){ S.pd.tab = t; drawDetail(); d.scrollTop = 0; }));
-  var body = h('div', {class:'pd-body'}, S.pd.tab === 'tl' ? timelineList(p) : detailBody(p, S.pd.mine));
+    tabBar([{key:'info', label:'รายละเอียด', count:0}].concat(modeOf(p) === 'steps' ? [{key:'steps', label:'ขั้นตอน', count:(p.steps || []).length, plain:true}] : [])
+      .concat([{key:'tl', label:'ไทม์ไลน์', count:(p.history || []).length, plain:true}]), S.pd.tab, function(t){ S.pd.tab = t; drawDetail(); d.scrollTop = 0; }));
+  if(S.pd.tab === 'steps' && modeOf(p) !== 'steps') S.pd.tab = 'info';
+  var body = h('div', {class:'pd-body'}, S.pd.tab === 'tl' ? timelineList(p) : S.pd.tab === 'steps' ? stepsList(p, S.pd.mine) : detailBody(p, S.pd.mine));
   d.replaceChildren(head, body);
 }
 function detailBody(p, mine){
@@ -453,10 +497,11 @@ function detailBody(p, mine){
   var out = [
     approvalBadge(p) ? h('div', {class:'row'}, approvalBadge(p), a.state === 'approved' && a.editedAfter ? h('span', {class:'warn', text:'แก้ไขหลังอนุมัติ'}) : null) : null,
     a.state === 'returned' && a.note ? h('p', {class:'warn', text:'เหตุผลที่ส่งกลับ: ' + a.note}) : null,
-    h('div', {class:'meter', role:'progressbar', 'aria-valuenow':p.progress, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'ความคืบหน้า'}, h('i', {style:'width:' + p.progress + '%'})),
-    h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '%'}),
+    h('p', {class:'small muted', text:MODE[modeOf(p)]}),
+    meterFor(p),
     h('p', {class:'small'}, h('b', {text:'ผู้รับผิดชอบหลัก: '}), p.ownerName + (mine && !p.isCreator ? ' (โปรเจกต์ร่วม)' : '')),
     deadlineRow(p),
+    workBox(p, mine),
     p.handover ? h('p', {class:'small warn', text:'กำลังโอนความรับผิดชอบหลักให้ ' + p.handover.toName + ' (รอยอมรับ)'}) : null,
     p.coOwners && p.coOwners.length ? h('p', {class:'small', text:'ผู้ร่วมรับผิดชอบ: ' + p.coOwners.map(coText).join(', ')}) : null,
     p.details ? h('p', {text:p.details}) : null,
@@ -472,11 +517,84 @@ function detailBody(p, mine){
   if(S.role === 'owner') out.push(ownerTools(p));
   return out;
 }
+/* Hand-off: who holds the turn, what to do, by when, and the pass-on button. Steps: the current step and a link to the tab. */
+function workBox(p, mine){
+  var box = h('div', {class:'card', style:'padding:12px;gap:8px'});
+  if(modeOf(p) === 'steps'){
+    var c = curStep(p);
+    box.append(workLine(p) || h('p', {class:'small muted', text:'ยังไม่มีขั้นตอน'}));
+    if(c) box.append(h('button', {class:'btn sm', type:'button', text:'ดูขั้นตอนทั้งหมด', onclick:function(){ S.pd.tab = 'steps'; drawDetail(); }}));
+    return box;
+  }
+  var t = p.turn;
+  box.append(t ? workLine(p) : h('p', {class:'small muted', text:'ยังไม่มีคนถือตา'}));
+  if(t && t.note) box.append(h('p', {class:'small', text:'ให้ทำ: ' + t.note + (t.by ? ' (ส่งโดย ' + t.by + ')' : '')}));
+  if(mine && (p.myTurn || p.isCreator)) box.append(h('div', {class:'row'}, h('button', {class:'btn sm primary', type:'button', text:'ส่งต่อให้…', onclick:function(){ passDialog(p); }})));
+  return box;
+}
+function stepsList(p, mine){
+  var st = p.steps || [];
+  if(!st.length) return h('p', {class:'muted', text:'ยังไม่มีขั้นตอน'});
+  return [meterFor(p), h('ol', {class:'steps'}, st.map(function(x, i){
+    var cur = i === p.currentStep, done = !!x.doneAt;
+    var canDone = cur && mine && (p.isCreator || x.assignee === S.id);
+    return h('li', {class:'step' + (done ? ' done' : cur ? ' cur' : '')},
+      h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
+        h('div', {}, h('b', {text:(done ? '✔ ' : cur ? '▶ ' : '') + (i + 1) + '. ' + x.title}),
+          h('p', {class:'small'}, 'ผู้รับผิดชอบ: ' + x.assigneeName + ' · ภายใน ' + dlText(x.due) + ' ', done ? null : dueBadge(x.due, false)),
+          done ? h('p', {class:'small ok', text:'เสร็จ ' + fmt(x.doneAt) + ' โดย ' + x.doneBy}) : null,
+          done && x.note ? h('p', {class:'small', text:'หมายเหตุ: ' + x.note}) : null),
+        h('div', {class:'row', style:'flex:none'},
+          canDone ? h('button', {class:'btn sm primary', type:'button', text:'เสร็จขั้นนี้', onclick:function(){ stepDoneDialog(p, x, i); }}) : null,
+          done && mine && p.isCreator ? actBtn('ย้อนกลับ', 'sm', 'กำลังบันทึก...', function(){ return call({action:'stepReopen', id:p.id, sid:x.sid}); }) : null)));
+  }))];
+}
+function stepDoneDialog(p, x, i){
+  var d = $('#dlg'), note = h('textarea', {id:'sd-note', maxlength:500, style:'min-height:64px', placeholder:'ไม่บังคับ'}), err = h('p', {class:'err', role:'alert'});
+  var go = h('button', {class:'btn primary', type:'button', text:'ยืนยันว่าเสร็จ'});
+  go.addEventListener('click', function(){ withBusy(go, 'กำลังบันทึก...', async function(){
+    try{ var j = await call({action:'stepDone', id:p.id, sid:x.sid, note:note.value}); if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
+    catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+  }); });
+  var next = (p.steps || [])[i + 1];
+  d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
+    h('h2', {text:'เสร็จขั้นที่ ' + (i + 1) + ': ' + x.title}),
+    h('p', {class:'small muted', text:next ? 'ขั้นต่อไป "' + next.title + '" จะไปขึ้นที่ ' + next.assigneeName : 'นี่คือขั้นสุดท้าย โปรเจกต์จะเป็น "เสร็จสิ้น"'}),
+    h('div', {class:'field'}, h('label', {for:'sd-note', text:'หมายเหตุ'}), note), err,
+    h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
+  d.showModal();
+}
+function passDialog(p){
+  var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
+  var people = [{id:p.ownerId, name:p.ownerName}].concat((p.coOwners || []).filter(function(c){ return c.state === 'accepted'; }).map(function(c){ return {id:c.id, name:c.name}; }));
+  var to = h('select', {id:'tp-to'}, h('option', {value:'', text:'เลือกคน'}), people.filter(function(m){ return !p.turn || m.id !== p.turn.to; }).map(function(m){ return h('option', {value:m.id, text:m.name}); }));
+  var note = h('textarea', {id:'tp-note', maxlength:300, style:'min-height:64px', placeholder:'เช่น ขอใบเสนอราคา 3 เจ้า'});
+  var due = h('input', {type:'date', id:'tp-due', min:'2000-01-01', max:p.deadline || '2100-12-31'});
+  var go = h('button', {class:'btn primary', type:'button', text:'ส่งต่อ'});
+  go.addEventListener('click', function(){
+    err.textContent = '';
+    if(!to.value){ err.textContent = 'เลือกคนที่จะส่งต่อ'; return; }
+    if(!note.value.trim()){ err.textContent = 'เขียนว่าให้ทำอะไร'; return; }
+    if(!due.value){ err.textContent = 'ใส่วันที่ต้องเสร็จ'; return; }
+    if(p.deadline && due.value > p.deadline){ err.textContent = ERR.turndue; return; }
+    withBusy(go, 'กำลังส่ง...', async function(){
+      try{ var j = await call({action:'turnPass', id:p.id, to:to.value, note:note.value, due:due.value}); if(j.ok){ closeDlg(); toast('ส่งต่อแล้ว'); await refresh(); } else err.textContent = errText(j, 'ส่งต่อไม่สำเร็จ'); }
+      catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    });
+  });
+  d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
+    h('h2', {text:'ส่งต่องาน: ' + p.name}),
+    h('div', {class:'field'}, h('label', {for:'tp-to', text:'ส่งต่อให้'}), to),
+    h('div', {class:'field'}, h('label', {for:'tp-note', text:'ให้ทำอะไร'}), note),
+    h('div', {class:'field'}, h('label', {for:'tp-due', text:'ต้องเสร็จภายใน' + (p.deadline ? ' (ไม่เกิน ' + dlText(p.deadline) + ')' : '')}), due), err,
+    h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
+  d.showModal();
+}
 function timelineList(p){
   var items = (p.history || []).slice().sort(function(a, b){ return new Date(b.at) - new Date(a.at); });
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
-    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create') ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
+    return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
@@ -491,12 +609,20 @@ function managerView(){
   msgs.sort(function(x, y){ return (y.c.needsMyAck ? 1 : 0) - (x.c.needsMyAck ? 1 : 0) || new Date(y.c.at) - new Date(x.c.at); });
   var needCount = msgs.filter(function(m){ return m.c.needsMyAck; }).length;
   var returned = S.projects.filter(function(p){ return p.approval && p.approval.state === 'returned'; });
+  var myTurn = S.projects.filter(function(p){ return p.myTurn; });
   box.appendChild(tabBar([
     {key:'mine', label:'โปรเจกต์ของฉัน', count:0},
+    {key:'turn', label:'งานที่รอฉัน', count:myTurn.length},
     {key:'msgs', label:'ข้อความจากเจ้าของบริษัท', count:needCount},
     {key:'invites', label:'รอรับทราบ', count:S.invites.length + S.handoverInvites.length},
     {key:'fix', label:'รอแก้ไข', count:returned.length}
   ], S.tabM, function(k){ S.tabM = k; render(); }));
+  if(S.tabM === 'turn'){
+    box.appendChild(h('p', {class:'muted small', text:'โปรเจกต์ที่ถึงตาคุณ: ขั้นตอนปัจจุบันเป็นของคุณ หรือมีคนส่งต่องานมาให้คุณ'}));
+    if(!myTurn.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีงานที่รอคุณ'}));
+    else box.appendChild(h('div', {class:'cards'}, myTurn.map(function(p){ return projectCard(p, true); })));
+    return box;
+  }
   if(S.tabM === 'invites'){
     if(!S.invites.length && !S.handoverInvites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
     S.handoverInvites.forEach(function(iv){
@@ -573,11 +699,55 @@ function projectForm(p){
   var cur = p || {name:'', status:'inprogress', progress:0, details:'', issue:'', images:[], coOwners:[], approval:{state:''}, isCreator:true, ownerName:S.name};
   var images = cur.images.slice(), creator = isNew || cur.isCreator;
   var name = h('input', {type:'text', id:'f-name', maxlength:120, value:cur.name});
-  var prog = h('input', {type:'range', id:'f-prog', min:0, max:100, step:5, value:cur.progress});
-  var progOut = h('span', {class:'small', text:cur.progress + '%'});
-  prog.addEventListener('input', function(){ progOut.textContent = prog.value + '%'; });
   var dl = h('input', {type:'date', id:'f-dl', value:cur.deadline || '', min:'2000-01-01', max:'2100-12-31'});
-  var dlClear = h('button', {class:'btn sm', type:'button', text:'ล้างวันที่', onclick:function(){ dl.value = ''; }});
+  // work mode: chosen by the main responsible person
+  var mode = isNew ? 'handoff' : modeOf(cur);
+  var modeRadios = h('div', {class:'radios', role:'radiogroup', 'aria-label':'รูปแบบงาน'}, ['handoff', 'steps'].map(function(k){
+    var r = h('input', {type:'radio', name:'f-mode', value:k}); r.checked = mode === k;
+    r.addEventListener('change', function(){ mode = k; drawWork(); });
+    return h('label', {}, r, MODE[k]);
+  }));
+  var tdue = h('input', {type:'date', id:'f-tdue', min:'2000-01-01', max:'2100-12-31'});
+  var steps = (cur.steps || []).map(function(x){ return {sid:x.sid, title:x.title, assignee:x.assignee, due:x.due, doneAt:x.doneAt}; });
+  var workBoxEl = h('div', {class:'field'});
+  function assignees(){ // the main responsible person + co-owners who are (or are about to be) invited
+    var list = [{id:cur.ownerId || S.id, name:cur.ownerName || S.name}];
+    if(creator) coBoxes.forEach(function(b){ if(b.checked && coState[b.value] !== 'declined') list.push({id:b.value, name:(S.managers.filter(function(m){ return m.id === b.value; })[0] || {}).name || b.value}); });
+    else (cur.coOwners || []).forEach(function(c){ if(c.state !== 'declined') list.push({id:c.id, name:c.name}); });
+    return list;
+  }
+  function drawWork(){
+    var kids = [];
+    if(mode === 'steps'){
+      if(!creator){ kids.push(h('p', {class:'small muted', text:'เฉพาะผู้รับผิดชอบหลักตั้งหรือแก้ขั้นตอนได้ (' + steps.length + ' ขั้น)'})); workBoxEl.replaceChildren.apply(workBoxEl, kids); return; }
+      if(!steps.length) steps.push({title:'', assignee:cur.ownerId || S.id, due:''});
+      var people = assignees();
+      kids.push(h('span', {class:'lbl', text:'ขั้นตอน (เรียงตามลำดับที่ต้องทำ)'}));
+      steps.forEach(function(x, i){
+        var t = h('input', {type:'text', maxlength:120, placeholder:'ชื่อขั้นตอน', value:x.title, 'aria-label':'ชื่อขั้นที่ ' + (i + 1)});
+        t.addEventListener('input', function(){ x.title = t.value; });
+        var a = h('select', {'aria-label':'ผู้รับผิดชอบขั้นที่ ' + (i + 1)}, people.map(function(m){ var o = h('option', {value:m.id, text:m.name}); o.selected = m.id === x.assignee; return o; }));
+        if(!people.some(function(m){ return m.id === x.assignee; })) x.assignee = people[0].id;
+        a.addEventListener('change', function(){ x.assignee = a.value; });
+        var du = h('input', {type:'date', min:'2000-01-01', max:'2100-12-31', value:x.due || '', 'aria-label':'กำหนดเสร็จขั้นที่ ' + (i + 1)});
+        du.addEventListener('input', function(){ x.due = du.value; });
+        var mv = function(j){ var y = steps.splice(i, 1)[0]; steps.splice(j, 0, y); drawWork(); };
+        kids.push(h('div', {class:'steprow'},
+          h('b', {class:'small', text:(x.doneAt ? '✔ ' : '') + (i + 1) + '.'}), t, a, du,
+          h('div', {class:'row', style:'flex:none;gap:4px'},
+            h('button', {class:'btn sm', type:'button', text:'↑', 'aria-label':'เลื่อนขึ้น', disabled:i === 0, onclick:function(){ mv(i - 1); }}),
+            h('button', {class:'btn sm', type:'button', text:'↓', 'aria-label':'เลื่อนลง', disabled:i === steps.length - 1, onclick:function(){ mv(i + 1); }}),
+            h('button', {class:'btn sm danger', type:'button', text:'ลบ', 'aria-label':'ลบขั้นที่ ' + (i + 1), disabled:steps.length === 1, onclick:function(){ steps.splice(i, 1); drawWork(); }}))));
+      });
+      kids.push(h('div', {class:'row'}, h('button', {class:'btn sm', type:'button', text:'+ เพิ่มขั้นตอน', onclick:function(){ steps.push({title:'', assignee:cur.ownerId || S.id, due:''}); drawWork(); }})));
+      kids.push(h('p', {class:'small muted', text:'ความคืบหน้าคำนวณจากจำนวนขั้นที่เสร็จ กำหนดเสร็จของแต่ละขั้นต้องไม่เกินกำหนดเสร็จของโปรเจกต์'}));
+    } else if(!cur.turn){
+      kids.push(h('label', {for:'f-tdue', text:'กำหนดเสร็จของตาแรก (คุณถือตาก่อน)'}), tdue);
+    } else {
+      kids.push(h('p', {class:'small muted', text:'ตอนนี้ถึงตา: ' + cur.turn.toName + ' · ส่งต่องานได้จากหน้ารายละเอียดโปรเจกต์'}));
+    }
+    workBoxEl.replaceChildren.apply(workBoxEl, kids);
+  }
   var details = h('textarea', {id:'f-det', maxlength:4000}); details.value = cur.details;
   var issue = h('textarea', {id:'f-iss', maxlength:2000, style:'min-height:64px'}); issue.value = cur.issue;
   var radios = h('div', {class:'radios', role:'radiogroup', 'aria-label':'สถานะ'}, ORDER.map(function(k){
@@ -585,6 +755,7 @@ function projectForm(p){
     return h('label', {}, r, ST[k].label);
   }));
   var coState = {}; (cur.coOwners || []).forEach(function(c){ coState[c.id] = c.state; });
+  setTimeout(function(){ coBoxes.forEach(function(b){ b.addEventListener('change', function(){ if(mode === 'steps') drawWork(); }); }); drawWork(); }, 0);
   var others = S.managers.filter(function(m){ return m.id !== S.id && m.id !== cur.ownerId; });
   var coBoxes = [];
   var coField = creator
@@ -626,9 +797,19 @@ function projectForm(p){
     e.preventDefault(); err.textContent = '';
     var st = ($('input[name="f-status"]:checked', form) || {}).value;
     if(!name.value.trim()){ err.textContent = 'กรอกชื่อโปรเจกต์'; return; }
+    if(!dl.value){ err.textContent = ERR.nodeadline; return; }
+    if(mode === 'steps' && creator){
+      if(steps.some(function(x){ return !x.title.trim() || !x.due || !x.assignee; })){ err.textContent = ERR.badstep; return; }
+      if(steps.some(function(x){ return !x.doneAt && x.due > dl.value; })){ err.textContent = ERR.stepdue; return; }
+    }
+    if(mode === 'handoff' && !cur.turn){
+      if(!tdue.value){ err.textContent = 'ใส่กำหนดเสร็จของตาแรก'; return; }
+      if(tdue.value > dl.value){ err.textContent = ERR.turndue; return; }
+    }
     withBusy(save, 'กำลังบันทึก...', async function(){
       try{
-        var j = await call({action:'save', project:{id:p ? p.id : '', name:name.value, status:st, progress:Number(prog.value), deadline:dl.value, details:details.value, issue:issue.value,
+        var j = await call({action:'save', project:{id:p ? p.id : '', name:name.value, status:st, deadline:dl.value, details:details.value, issue:issue.value,
+          mode:mode, steps:mode === 'steps' && creator ? steps.map(function(x){ return {sid:x.sid || '', title:x.title, assignee:x.assignee, due:x.due}; }) : undefined, turnDue:tdue.value,
           coOwners:coBoxes.filter(function(b){ return b.checked; }).map(function(b){ return b.value; }), images:images,
           loc:cur.loc || null, label:label.value, requestApproval:reqBox.checked}});
         if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ ลองอีกครั้ง');
@@ -638,8 +819,10 @@ function projectForm(p){
     h('h2', {text:isNew ? 'เพิ่มโปรเจกต์' : 'แก้ไขโปรเจกต์'}),
     h('div', {class:'field'}, h('label', {for:'f-name', text:'ชื่อโปรเจกต์'}), name),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'สถานะ'}), radios),
-    h('div', {class:'field'}, h('label', {for:'f-prog', text:'ความคืบหน้า'}), h('div', {class:'row'}, prog, progOut)),
-    h('div', {class:'field'}, h('label', {for:'f-dl', text:'กำหนดเสร็จ (ไม่บังคับ)'}), h('div', {class:'row'}, dl, dlClear)),
+    h('div', {class:'field'}, h('label', {for:'f-dl', text:'กำหนดเสร็จของโปรเจกต์'}), dl),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'รูปแบบงาน'}), creator ? modeRadios : h('p', {class:'small', text:MODE[mode]}),
+      creator ? h('p', {class:'small muted', text:'แบบขั้นตอน: แบ่งงานเป็นขั้น แต่ละขั้นมีคนรับผิดชอบและกำหนดเสร็จ · แบบส่งต่อ: ส่งงานต่อกันทีละคน พร้อมบอกว่าให้ทำอะไรและภายในวันไหน'}) : null),
+    workBoxEl,
     h('div', {class:'field'}, h('label', {for:'f-det', text:'รายละเอียด'}), details),
     h('div', {class:'field'}, h('label', {for:'f-iss', text:'ปัญหา / ความเสี่ยง (ถ้ามี)'}), issue),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'ผู้รับผิดชอบร่วม'}), coField,
