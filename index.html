@@ -67,6 +67,12 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .thumb{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--bg);cursor:pointer}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb .x{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
+.files{display:flex;flex-wrap:wrap;gap:6px}
+.files:empty{display:none}
+.filechip{display:inline-flex;align-items:center;gap:2px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.filechip .file{border:0;background:none;color:inherit;font:inherit;font-size:13px;padding:6px 8px;cursor:pointer;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.filechip .file:hover{text-decoration:underline}
+.filechip .x{border:0;background:none;color:inherit;cursor:pointer;width:28px;height:28px;font-size:16px;line-height:1}
 .warn{color:var(--risk);font-size:.85rem}
 .ok{color:var(--done);font-size:.85rem}
 a{color:var(--accent)}
@@ -117,7 +123,7 @@ var ST = {
 var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
-var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', noreport:'เขียนสรุปงานที่ทำไปแล้วก่อน', noreason:'ต้องใส่เหตุผล', badtask:'ใบงานต้องมีคนทำ งาน และวันที่', taskdue:'วันที่ของใบงานต้องไม่เกินกำหนดเสร็จของโปรเจกต์ (มีใบงานที่ยังเปิดอยู่เลยวันนั้น)', needapproval:'ใบงานนี้ต้องให้เจ้าของบริษัทอนุมัติก่อน', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
+var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', noreport:'เขียนสรุปงานที่ทำไปแล้วก่อน',filetype:'แนบได้เฉพาะไฟล์ PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP, JPG, PNG',filesize:'ไฟล์ต้องไม่เกิน 4 MB', noreason:'ต้องใส่เหตุผล', badtask:'ใบงานต้องมีคนทำ งาน และวันที่', taskdue:'วันที่ของใบงานต้องไม่เกินกำหนดเสร็จของโปรเจกต์ (มีใบงานที่ยังเปิดอยู่เลยวันนั้น)', needapproval:'ใบงานนี้ต้องให้เจ้าของบริษัทอนุมัติก่อน', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
 var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], handoverInvites:[], adminProjects:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
@@ -229,6 +235,72 @@ function showImage(src){
   var d = $('#dlg'); d.replaceChildren(h('img', {src:src, alt:'', style:'width:100%;border-radius:8px'}), h('div', {class:'row', style:'margin-top:12px'}, h('button', {class:'btn', text:'ปิด', onclick:closeDlg})));
   d.showModal();
 }
+/* ---------- files on work reports ---------- */
+var MAX_FILES = 5, MAX_FILE_MB = 4, FILE_EXT = ['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','zip','jpg','jpeg','png'];
+function sizeText(n){ return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function openFile(f, btn){
+  withBusy(btn, 'กำลังเปิด...', async function(){
+    try{ var j = await call({action:'file', id:f.id});
+      if(!j.ok){ toast(errText(j, 'เปิดไฟล์ไม่ได้')); return; }
+      var a = h('a', {href:j.data, download:f.name, rel:'noopener', style:'display:none'}); document.body.appendChild(a); a.click(); a.remove();
+    }catch(x){ toast('เปิดไฟล์ไม่ได้'); }
+  });
+}
+function fileChip(f, onRemove){
+  var b = h('button', {class:'file', type:'button', title:f.name, text:'📎 ' + f.name + (f.size ? ' (' + sizeText(f.size) + ')' : '')});
+  if(!onRemove) b.addEventListener('click', function(){ openFile(f, b); });
+  return h('span', {class:'filechip'}, b, onRemove ? h('button', {class:'x', type:'button', 'aria-label':'ลบไฟล์ ' + f.name, text:'×', onclick:onRemove}) : null);
+}
+function filesEl(files){ return files && files.length ? h('div', {class:'files'}, files.map(function(f){ return fileChip(f, null); })) : null; }
+/* text, photos and files of a work report (task or step) */
+function reportView(r, head){
+  if(!r) return null;
+  return h('div', {class:'cm'}, head ? h('p', {class:'small muted', text:head}) : null, r.text ? h('p', {class:'small', text:r.text}) : null,
+    r.images && r.images.length ? h('div', {class:'thumbs'}, r.images.map(function(id){ return thumbEl(id, false); })) : null, filesEl(r.files));
+}
+function readB64(file){
+  return new Promise(function(resolve, reject){ var r = new FileReader(); r.onerror = reject; r.onload = function(){ resolve(String(r.result).split(',')[1] || ''); }; r.readAsDataURL(file); });
+}
+/* photo and file pickers for a report; .images and .files hold what was uploaded */
+function attachBox(){
+  var box = {images:[], files:[]};
+  var thumbs = h('div', {class:'thumbs'}), flist = h('div', {class:'files'});
+  function draw(){
+    thumbs.replaceChildren.apply(thumbs, box.images.map(function(id, i){ return thumbEl(id, true, function(){ box.images.splice(i, 1); draw(); }); }));
+    flist.replaceChildren.apply(flist, box.files.map(function(f, i){ return fileChip(f, function(){ box.files.splice(i, 1); draw(); }); }));
+  }
+  var imgIn = h('input', {type:'file', accept:'image/*', multiple:true, hidden:true, class:'att-img'});
+  var fileIn = h('input', {type:'file', accept:FILE_EXT.map(function(e){ return '.' + e; }).join(','), multiple:true, hidden:true, class:'att-file'});
+  var pickImg = h('button', {class:'btn sm', type:'button', text:'แนบรูป', onclick:function(){ imgIn.click(); }});
+  var pickFile = h('button', {class:'btn sm', type:'button', text:'แนบไฟล์', onclick:function(){ fileIn.click(); }});
+  imgIn.addEventListener('change', function(){
+    var list = Array.prototype.slice.call(imgIn.files); imgIn.value = '';
+    withBusy(pickImg, 'กำลังอัปโหลด...', async function(){
+      for(var i = 0; i < list.length; i++){
+        if(box.images.length >= MAX_IMG){ toast('แนบรูปได้ไม่เกิน ' + MAX_IMG + ' รูป'); break; }
+        try{ var b64 = await resize(list[i]); var j = await call({action:'upload', data:b64});
+          if(j.ok){ imgCache[j.id] = {d:'data:image/jpeg;base64,' + b64, t:Date.now()}; box.images.push(j.id); draw(); } else toast('อัปโหลดรูปไม่สำเร็จ');
+        }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
+      }
+    });
+  });
+  fileIn.addEventListener('change', function(){
+    var list = Array.prototype.slice.call(fileIn.files); fileIn.value = '';
+    withBusy(pickFile, 'กำลังอัปโหลด...', async function(){
+      for(var i = 0; i < list.length; i++){
+        var f = list[i], ext = (/\.([a-z0-9]+)$/i.exec(f.name) || ['', ''])[1].toLowerCase();
+        if(box.files.length >= MAX_FILES){ toast('แนบไฟล์ได้ไม่เกิน ' + MAX_FILES + ' ไฟล์'); break; }
+        if(FILE_EXT.indexOf(ext) < 0){ toast(ERR.filetype); continue; }
+        if(f.size > MAX_FILE_MB * 1048576){ toast(f.name + ': ' + ERR.filesize); continue; }
+        try{ var j = await call({action:'uploadFile', name:f.name, data:await readB64(f)});
+          if(j.ok){ box.files.push(j.file); draw(); } else toast(f.name + ': ' + errText(j, 'อัปโหลดไฟล์ไม่สำเร็จ'));
+        }catch(x){ toast('อัปโหลดไฟล์ไม่สำเร็จ'); }
+      }
+    });
+  });
+  box.el = [thumbs, flist, h('div', {class:'row'}, pickImg, pickFile), h('p', {class:'small muted', text:'รูปไม่เกิน ' + MAX_IMG + ' รูป · ไฟล์ไม่เกิน ' + MAX_FILES + ' ไฟล์ ไฟล์ละไม่เกิน ' + MAX_FILE_MB + ' MB (PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP, JPG, PNG)'}), imgIn, fileIn];
+  return box;
+}
 function resize(file){
   return new Promise(function(resolve, reject){
     var r = new FileReader();
@@ -326,7 +398,8 @@ var EVT = {
   handover:function(e){ return 'โอนความรับผิดชอบหลักแล้ว ' + e.note; },
   mode:function(e){ return 'เปลี่ยนเป็น' + (MODE[e.note] || e.note); },
   steps:function(e){ return 'ตั้งขั้นตอนงาน (' + e.note + ' ขั้น)'; },
-  'step-done':function(e){ return 'เสร็จ ' + e.note; },
+  // step-done / step-request notes are JSON {step, for, text, images, files}; older ones are plain text
+  'step-done':function(e){ var o = editOld(e); return o.step ? 'เสร็จ ' + o.step + (o.for ? ' (แทน ' + o.for + ')' : '') + (o.text ? ' — สรุปงาน: ' + o.text : '') : 'เสร็จ ' + e.note; },
   'step-reopen':function(e){ return 'ย้อนกลับมาทำใหม่ ' + e.note; },
   turn:function(e){ return e.note; },
   'task-add':function(e){ return 'แจกงานให้ ' + e.note; },
@@ -337,7 +410,7 @@ var EVT = {
   'task-returned':function(e){ return 'เจ้าของบริษัทส่งใบงานกลับ: ' + e.note; },
   'task-pass':function(e){ var o = editOld(e); return 'ส่งต่อให้ ' + o.to + ': ' + o.title + ' (ภายใน ' + o.due + ') · สรุปงาน: ' + (o.text || ''); },
   'task-done':function(e){ var o = editOld(e); return 'เสร็จใบงาน "' + (o.title || '') + '": ' + (o.text || ''); },
-  'step-request':function(e){ return 'ขออนุมัติ ' + e.note; },
+  'step-request':function(e){ var o = editOld(e); return o.step ? 'ขออนุมัติ ' + o.step + (o.text ? ' — แก้แล้ว: ' + o.text : '') : 'ขออนุมัติ ' + e.note; },
   'step-approved':function(e){ return 'เจ้าของบริษัทอนุมัติ ' + e.note; },
   'step-returned':function(e){ return 'เจ้าของบริษัทส่งกลับ ' + e.note; },
   'turn-report':function(e){ var o = editOld(e); return (o.kind === 'reason' ? 'เปลี่ยนคนถือตา เหตุผล: ' : 'สรุปงาน: ') + (o.text || ''); },
@@ -573,15 +646,17 @@ function stepsList(p, mine){
     if(cur && mine && x.approval.state !== 'pending'){
       if(me && !me.doneAt) actions.push(h('button', {class:'btn sm primary', type:'button', text:'เสร็จส่วนของฉัน', onclick:function(){ stepDoneDialog(p, x, i, ''); }}));
       if(p.isCreator) x.assignees.forEach(function(a){ if(!a.doneAt && a.id !== S.id) actions.push(h('button', {class:'btn sm', type:'button', text:'เสร็จแทน ' + a.name, onclick:function(){ stepDoneDialog(p, x, i, a.id, a.name); }})); });
-      if(allParts && x.approval.state === 'returned' && (me || p.isCreator)) actions.push(h('button', {class:'btn sm primary', type:'button', text:'ขออนุมัติใหม่', onclick:function(){ noteDialog('ขออนุมัติใหม่: ' + x.title, 'แก้อะไรไปแล้ว (ไม่บังคับ)', false, function(note){ return call({action:'stepRequest', id:p.id, sid:x.sid, note:note}); }); }}));
+      if(allParts && x.approval.state === 'returned' && (me || p.isCreator)) actions.push(h('button', {class:'btn sm primary', type:'button', text:'ขออนุมัติใหม่', onclick:function(){ stepDoneDialog(p, x, i, '', '', 'request'); }}));
     }
     if(done && mine && p.isCreator) actions.push(actBtn('ย้อนกลับ', 'sm', 'กำลังบันทึก...', function(){ return call({action:'stepReopen', id:p.id, sid:x.sid}); }));
     return h('li', {class:'step' + (done ? ' done' : cur ? ' cur' : '')},
       h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
         h('div', {style:'display:flex;flex-direction:column;gap:4px'}, h('b', {text:(done ? '✔ ' : cur ? '▶ ' : '') + (i + 1) + '. ' + x.title}),
           h('p', {class:'small'}, 'ภายใน ' + dlText(x.due) + ' ', done ? null : dueBadge(x.due, false)),
-          x.assignees.map(function(a){ return h('p', {class:'small ' + (a.doneAt ? 'ok' : '')}, (a.doneAt ? '✔ ' : '○ ') + a.name + (a.doneAt ? ' · เสร็จ ' + fmt(a.doneAt) + (a.doneBy && a.doneBy !== a.name ? ' (บันทึกโดย ' + a.doneBy + ')' : '') + (a.note ? ' · ' + a.note : '') : '')); }),
+          x.assignees.map(function(a){ return [h('p', {class:'small ' + (a.doneAt ? 'ok' : '')}, (a.doneAt ? '✔ ' : '○ ') + a.name + (a.doneAt ? ' · เสร็จ ' + fmt(a.doneAt) + (a.doneBy && a.doneBy !== a.name ? ' (บันทึกโดย ' + a.doneBy + ')' : '') : '')),
+            a.doneAt && (a.note || (a.images || []).length || (a.files || []).length) ? reportView({text:a.note, images:a.images, files:a.files}) : null]; }),
           approvalLine(x.approval, x.needApproval),
+          x.request && !done ? reportView(x.request, 'ขออนุมัติใหม่โดย ' + x.request.by + ' · ' + fmt(x.request.at)) : null,
           cur && x.approval.state === 'pending' ? ownerDecide('step', p, 'sid', x.sid) : null),
         h('div', {class:'row', style:'flex:none'}, actions)));
   }))];
@@ -608,7 +683,7 @@ function tasksList(p, mine){
     }
     var chain = t.chain && t.chain.length ? h('details', {}, h('summary', {class:'small', text:'ประวัติการส่งต่อ (' + t.chain.length + ')'}),
       t.chain.map(function(c){ return h('div', {class:'cm', style:'margin-top:6px'}, h('p', {class:'small muted', text:c.from + ' → ' + c.toName + ' · ' + fmt(c.at)}), h('p', {class:'small', text:'งานเดิม: ' + c.title}), h('p', {class:'small', text:'สรุป: ' + c.report}),
-        c.images && c.images.length ? h('div', {class:'thumbs'}, c.images.map(function(id){ return thumbEl(id, false); })) : null); })) : null;
+        c.images && c.images.length ? h('div', {class:'thumbs'}, c.images.map(function(id){ return thumbEl(id, false); })) : null, filesEl(c.files)); })) : null;
     return h('li', {class:'step' + (open ? (t.to === S.id ? ' cur' : '') : ' done')},
       h('div', {class:'row', style:'justify-content:space-between;flex-wrap:nowrap;align-items:flex-start'},
         h('div', {style:'display:flex;flex-direction:column;gap:4px;min-width:0'},
@@ -617,8 +692,7 @@ function tasksList(p, mine){
           t.status === 'done' ? h('p', {class:'small ok', text:'เสร็จ ' + fmt(t.doneAt) + ' โดย ' + t.doneBy}) : null,
           t.status === 'cancelled' ? h('p', {class:'small muted', text:'ยกเลิกแล้ว: ' + t.cancelReason}) : null,
           open ? approvalLine(t.approval, t.needApproval) : null,
-          t.report ? h('div', {class:'cm'}, h('p', {class:'small muted', text:'สรุปงานล่าสุดจาก ' + t.report.by + ' · ' + fmt(t.report.at)}), h('p', {class:'small', text:t.report.text}),
-            t.report.images.length ? h('div', {class:'thumbs'}, t.report.images.map(function(id){ return thumbEl(id, false); })) : null) : null,
+          t.report ? reportView(t.report, 'สรุปงานล่าสุดจาก ' + t.report.by + ' · ' + fmt(t.report.at)) : null,
           chain,
           open && t.approval.state === 'pending' ? ownerDecide('task', p, 'tid', t.tid) : null),
         h('div', {class:'row', style:'flex:none;flex-direction:column;align-items:stretch'}, acts)));
@@ -641,20 +715,34 @@ function noteDialog(title, label, required, send){
     h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
   d.showModal();
 }
-function stepDoneDialog(p, x, i, who, whoName){
-  var d = $('#dlg'), note = h('textarea', {id:'sd-note', maxlength:500, style:'min-height:64px', placeholder:'ไม่บังคับ'}), err = h('p', {class:'err', role:'alert'});
-  var go = h('button', {class:'btn primary', type:'button', text:'ยืนยันว่าเสร็จ'});
-  go.addEventListener('click', function(){ withBusy(go, 'กำลังบันทึก...', async function(){
-    try{ var j = await call({action:'stepDone', id:p.id, sid:x.sid, note:note.value, who:who || ''}); if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
-    catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
-  }); });
-  var left = x.assignees.filter(function(a){ return !a.doneAt && a.id !== (who || S.id); }).map(function(a){ return a.name; });
-  var next = (p.steps || [])[i + 1];
-  var after = left.length ? 'ยังรอ ' + left.join(', ') + ' ทำส่วนของตัวเอง' : x.needApproval ? 'ทุกคนครบแล้ว ขั้นนี้จะไปรอเจ้าของบริษัทอนุมัติ' : next ? 'ขั้นต่อไป "' + next.title + '" จะไปขึ้นที่ ' + next.assignees.map(function(a){ return a.name; }).join(', ') : 'นี่คือขั้นสุดท้าย โปรเจกต์จะเป็น "เสร็จสิ้น"';
+/* a step report, like a task report: kind = done (finish my part, or someone's part as the main owner) or request (ask again after a return) */
+function stepDoneDialog(p, x, i, who, whoName, kind){
+  kind = kind || 'done';
+  var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
+  var note = h('textarea', {id:'sd-note', maxlength:1000, style:'min-height:80px', placeholder:kind === 'request' ? 'เช่น ถ่ายรูปหลังติดตั้งเพิ่มแล้ว' : 'เช่น ติดตั้งฝั่งซ้ายเสร็จ ทดสอบแล้วไม่รั่ว'});
+  var att = attachBox();
+  var go = h('button', {class:'btn primary', type:'button', text:kind === 'request' ? 'ขออนุมัติใหม่' : 'ยืนยันว่าเสร็จ'});
+  go.addEventListener('click', function(){
+    err.textContent = '';
+    if(!note.value.trim()){ err.textContent = ERR.noreport; return; }
+    var body = kind === 'request' ? {action:'stepRequest', id:p.id, sid:x.sid, note:note.value, images:att.images, files:att.files}
+      : {action:'stepDone', id:p.id, sid:x.sid, note:note.value, who:who || '', images:att.images, files:att.files};
+    withBusy(go, 'กำลังบันทึก...', async function(){
+      try{ var j = await call(body); if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ'); }
+      catch(e){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    });
+  });
+  var after;
+  if(kind === 'request') after = 'เจ้าของบริษัทส่งกลับ: ' + (x.approval.note || '-') + ' · สรุป รูป และไฟล์นี้จะไปให้เจ้าของบริษัทดูอีกครั้ง';
+  else {
+    var left = x.assignees.filter(function(a){ return !a.doneAt && a.id !== (who || S.id); }).map(function(a){ return a.name; });
+    var next = (p.steps || [])[i + 1];
+    after = left.length ? 'ยังรอ ' + left.join(', ') + ' ทำส่วนของตัวเอง' : x.needApproval ? 'ทุกคนครบแล้ว ขั้นนี้จะไปรอเจ้าของบริษัทอนุมัติ' : next ? 'ขั้นต่อไป "' + next.title + '" จะไปขึ้นที่ ' + next.assignees.map(function(a){ return a.name; }).join(', ') : 'นี่คือขั้นสุดท้าย โปรเจกต์จะเป็น "เสร็จสิ้น"';
+  }
   d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
-    h('h2', {text:'เสร็จขั้นที่ ' + (i + 1) + ': ' + x.title + (who ? ' (แทน ' + whoName + ')' : '')}),
+    h('h2', {text:(kind === 'request' ? 'ขออนุมัติใหม่ ขั้นที่ ' : 'เสร็จขั้นที่ ') + (i + 1) + ': ' + x.title + (who ? ' (แทน ' + whoName + ')' : '')}),
     h('p', {class:'small muted', text:after}),
-    h('div', {class:'field'}, h('label', {for:'sd-note', text:'หมายเหตุ'}), note), err,
+    h('div', {class:'field'}, h('label', {for:'sd-note', text:(kind === 'request' ? 'แก้อะไรไปแล้ว' : who ? 'สรุปงานที่ ' + whoName + ' ทำ' : 'สรุปงานที่คุณทำ') + ' (ต้องกรอก)'}), note, att.el), err,
     h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
   d.showModal();
 }
@@ -697,22 +785,7 @@ function reportDialog(p, t, kind){
   var d = $('#dlg'), err = h('p', {class:'err', role:'alert'});
   var report = h('textarea', {id:'tp-report', maxlength:1000, style:'min-height:80px', placeholder:'เช่น ติดต่อร้านแล้ว 3 ร้าน ได้ราคามา 2 ร้าน'});
   if(t.report && t.report.by === S.name && kind !== 'request') report.value = t.report.text;
-  var rimgs = [], rthumbs = h('div', {class:'thumbs'});
-  function drawR(){ rthumbs.replaceChildren.apply(rthumbs, rimgs.map(function(id, i){ return thumbEl(id, true, function(){ rimgs.splice(i, 1); drawR(); }); })); }
-  var rfiles = h('input', {type:'file', accept:'image/*', multiple:true, hidden:true});
-  var rpick = h('button', {class:'btn sm', type:'button', text:'แนบรูป'});
-  rpick.addEventListener('click', function(){ rfiles.click(); });
-  rfiles.addEventListener('change', function(){
-    var list = Array.prototype.slice.call(rfiles.files); rfiles.value = '';
-    withBusy(rpick, 'กำลังอัปโหลด...', async function(){
-      for(var i = 0; i < list.length; i++){
-        if(rimgs.length >= MAX_IMG){ toast('แนบรูปได้ไม่เกิน ' + MAX_IMG + ' รูป'); break; }
-        try{ var b64 = await resize(list[i]); var j = await call({action:'upload', data:b64});
-          if(j.ok){ imgCache[j.id] = {d:'data:image/jpeg;base64,' + b64, t:Date.now()}; rimgs.push(j.id); drawR(); } else toast('อัปโหลดรูปไม่สำเร็จ');
-        }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
-      }
-    });
-  });
+  var att = attachBox();
   var to = h('select', {id:'tp-to'}, h('option', {value:'', text:'เลือกคน'}), peopleOf(p).filter(function(m){ return m.id !== S.id; }).map(function(m){ return h('option', {value:m.id, text:m.name}); }));
   var note = h('textarea', {id:'tp-note', maxlength:300, style:'min-height:64px', placeholder:'เช่น เลือกเจ้าที่จะจ้าง'});
   var due = h('input', {type:'date', id:'tp-due', min:'2000-01-01', max:'2100-12-31'});
@@ -727,7 +800,7 @@ function reportDialog(p, t, kind){
       if(!due.value){ err.textContent = 'ใส่วันที่ต้องเสร็จ'; return; }
       if(p.deadline && due.value > p.deadline){ err.textContent = 'วันที่ต้องไม่เกินกำหนดเสร็จของโปรเจกต์'; return; }
     }
-    var body = {action:{request:'taskRequest', pass:'taskPass', done:'taskDone'}[kind], id:p.id, tid:t.tid, report:report.value, images:rimgs};
+    var body = {action:{request:'taskRequest', pass:'taskPass', done:'taskDone'}[kind], id:p.id, tid:t.tid, report:report.value, images:att.images, files:att.files};
     if(kind === 'pass') body.next = {to:to.value, title:note.value, due:due.value};
     withBusy(go, 'กำลังส่ง...', async function(){
       try{ var j = await call(body); if(j.ok){ closeDlg(); toast('บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'ไม่สำเร็จ'); }
@@ -736,8 +809,8 @@ function reportDialog(p, t, kind){
   });
   d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
     h('h2', {text:label + ': ' + t.title}),
-    kind === 'request' ? h('p', {class:'small muted', text:'เจ้าของบริษัทจะเห็นสรุปและรูปนี้ เมื่ออนุมัติแล้วคุณจึงส่งต่อหรือปิดงานได้'}) : null,
-    h('div', {class:'field'}, h('label', {for:'tp-report', text:'สรุปงานที่คุณทำไปแล้ว (ต้องกรอก)'}), report, rthumbs, h('div', {class:'row'}, rpick), rfiles),
+    kind === 'request' ? h('p', {class:'small muted', text:'เจ้าของบริษัทจะเห็นสรุป รูป และไฟล์นี้ เมื่ออนุมัติแล้วคุณจึงส่งต่อหรือปิดงานได้'}) : null,
+    h('div', {class:'field'}, h('label', {for:'tp-report', text:'สรุปงานที่คุณทำไปแล้ว (ต้องกรอก)'}), report, att.el),
     kind === 'pass' ? [h('div', {class:'field'}, h('label', {for:'tp-to', text:'ส่งต่อให้'}), to),
       h('div', {class:'field'}, h('label', {for:'tp-note', text:'ให้ทำอะไรต่อ'}), note),
       h('div', {class:'field'}, h('label', {for:'tp-due', text:'ต้องเสร็จภายใน' + (p.deadline ? ' (ไม่เกิน ' + dlText(p.deadline) + ')' : '')}), due)] : null,
@@ -749,7 +822,8 @@ function timelineList(p){
   return items.length ? h('ul', {class:'tl'}, items.map(function(e){
     var f = EVT[e.event] || EVT.status;
     return h('li', {}, h('b', {text:f(e)}), (e.event === 'status' || e.event === 'create' || e.event === 'step-done' || e.event === 'step-reopen') && modeOf(p) === 'steps' ? ' · ' + e.progress + '%' : '', h('br'), h('span', {class:'muted small', text:fmt(e.at) + ' · ' + e.by}), e.event === 'edit' ? editDetail(e) : null,
-      /^(turn-report|task-request|task-pass|task-done)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null);
+      /^(turn-report|task-request|task-pass|task-done|step-done|step-request)$/.test(e.event) && (editOld(e).images || []).length ? h('div', {class:'thumbs', style:'margin-top:6px'}, editOld(e).images.map(function(id){ return thumbEl(id, false); })) : null,
+      /^(task-request|task-pass|task-done|step-done|step-request)$/.test(e.event) && (editOld(e).files || []).length ? h('div', {style:'margin-top:6px'}, filesEl(editOld(e).files)) : null);
   })) : h('p', {class:'muted', text:'ยังไม่มีประวัติ'});
 }
 
@@ -1087,7 +1161,7 @@ function ownerView(){
   var workPending = [];
   all.forEach(function(p){
     (p.tasks || []).forEach(function(t){ if(t.status === 'open' && t.approval.state === 'pending') workPending.push({p:p, kind:'task', id:t.tid, title:t.toName + ': ' + t.title, report:t.report}); });
-    var c = curStep(p); if(c && modeOf(p) === 'steps' && c.approval.state === 'pending') workPending.push({p:p, kind:'step', id:c.sid, title:'ขั้นที่ ' + (p.currentStep + 1) + ': ' + c.title, report:null, parts:c.assignees});
+    var c = curStep(p); if(c && modeOf(p) === 'steps' && c.approval.state === 'pending') workPending.push({p:p, kind:'step', id:c.sid, title:'ขั้นที่ ' + (p.currentStep + 1) + ': ' + c.title, report:c.request || null, parts:c.assignees});
   });
   var returned = all.filter(function(p){ return p.approval && p.approval.state === 'returned'; });
   var unacked = [];
@@ -1105,9 +1179,8 @@ function ownerView(){
       workPending.forEach(function(w){
         box.appendChild(h('div', {class:'card notice'},
           h('p', {class:'small muted', text:'โปรเจกต์ "' + w.p.name + '"'}), h('b', {text:w.title}),
-          w.report ? h('div', {class:'cm'}, h('p', {class:'small muted', text:'สรุปจาก ' + w.report.by + ' · ' + fmt(w.report.at)}), h('p', {class:'small', text:w.report.text}),
-            w.report.images.length ? h('div', {class:'thumbs'}, w.report.images.map(function(id){ return thumbEl(id, false); })) : null) : null,
-          w.parts ? w.parts.map(function(a){ return h('p', {class:'small', text:'✔ ' + a.name + (a.note ? ': ' + a.note : '')}); }) : null,
+          w.report ? reportView(w.report, (w.kind === 'step' ? 'ขออนุมัติใหม่โดย ' : 'สรุปจาก ') + w.report.by + ' · ' + fmt(w.report.at)) : null,
+          w.parts ? w.parts.map(function(a){ return reportView({text:a.note, images:a.images, files:a.files}, '✔ ' + a.name + (a.doneAt ? ' · ' + fmt(a.doneAt) : '')); }) : null,
           h('div', {class:'row'}, ownerDecide(w.kind, w.p, w.kind === 'task' ? 'tid' : 'sid', w.id), h('button', {class:'btn sm', type:'button', text:'เปิดโปรเจกต์', onclick:function(){ openDetail(w.p.id, false); }}))));
       });
       box.appendChild(h('h3', {text:'โปรเจกต์ที่รออนุมัติ (' + pending.length + ')'}));
