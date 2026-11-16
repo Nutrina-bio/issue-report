@@ -94,7 +94,7 @@ td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertic
 <dialog id="dlg"></dialog>
 <script>
 'use strict';
-var API = 'https://script.google.com/macros/s/AKfycby4begLhepsjGOOdCxJ-J5DUfO7QPUDXlRhK5wu0HtidfZf-q85sfMo66-JU0QTB6OSgw/exec';
+var API = 'https://uakdqyrczqnkjqxarqao.supabase.co/functions/v1/api';
 var ST = {
   delayed:{label:'ล่าช้า',cls:'late'},
   inprogress:{label:'กำลังดำเนินการ',cls:'prog'},
@@ -103,8 +103,8 @@ var ST = {
 var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 14, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
-var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ'};
-var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false};
+var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
+var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], handoverInvites:[], adminProjects:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
 function $(s, r){ return (r || document).querySelector(s); }
@@ -183,16 +183,18 @@ function pwField(attrs){
 }
 function cleanId(input){ input.addEventListener('input', function(){ var v = input.value.toLowerCase().replace(/[^a-z0-9]/g, ''); if(v !== input.value) input.value = v; }); }
 
-/* ---------- images (served through the API, loaded a few at a time) ---------- */
+/* ---------- images (the API returns a data URL or a signed link that expires after 1 hour; loaded a few at a time) ---------- */
+var IMG_TTL = 50 * 60 * 1000;
 function loadImg(id, cb){
-  if(imgCache[id]){ cb(imgCache[id]); return; }
+  var c = imgCache[id];
+  if(c && Date.now() - c.t < IMG_TTL){ cb(c.d); return; }
   imgQueue.push({id:id, cb:cb}); pumpImgs();
 }
 function pumpImgs(){
   while(imgActive < 3 && imgQueue.length){
     var job = imgQueue.shift(); imgActive++;
     (function(job){
-      call({action:'img', id:job.id}).then(function(j){ if(j.ok){ imgCache[job.id] = j.data; job.cb(j.data); } })
+      call({action:'img', id:job.id}).then(function(j){ if(j.ok){ imgCache[job.id] = {d:j.data, t:Date.now()}; job.cb(j.data); } })
         .catch(function(){}).then(function(){ imgActive--; pumpImgs(); });
     })(job);
   }
@@ -264,9 +266,14 @@ function loginView(){
 }
 
 async function refresh(){
-  if(S.role === 'admin'){ var a = await call({action:'people'}); if(a.ok) S.people = a.people; render(); return; }
+  if(S.role === 'admin'){
+    var both = await Promise.all([call({action:'people'}), call({action:'adminProjects'})]);
+    if(both[0].ok) S.people = both[0].people;
+    if(both[1].ok) S.adminProjects = both[1].projects;
+    render(); return;
+  }
   var j = await call({action:'list'});
-  if(j.ok){ S.projects = j.projects; S.invites = j.invites; S.managers = j.managers; S.name = j.me.name; saveSession(); }
+  if(j.ok){ S.projects = j.projects; S.invites = j.invites; S.handoverInvites = j.handoverInvites || []; S.managers = j.managers; S.name = j.me.name; saveSession(); }
   else if(j.error !== 'auth') toast('โหลดข้อมูลไม่สำเร็จ');
   render();
 }
@@ -293,6 +300,10 @@ var EVT = {
   'co-accepted':function(){ return 'รับทราบการร่วมรับผิดชอบ'; },
   'co-declined':function(){ return 'ปฏิเสธการร่วมรับผิดชอบ'; },
   transfer:function(e){ return 'โอนชื่อผู้รับผิดชอบ ' + e.note; },
+  'handover-offer':function(e){ return 'ขอโอนความรับผิดชอบหลัก ' + e.note; },
+  'handover-cancel':function(e){ return e.note; },
+  'handover-decline':function(e){ return e.note; },
+  handover:function(e){ return 'โอนความรับผิดชอบหลักแล้ว ' + e.note; },
   edit:function(e){ var o = editOld(e); return 'แก้ไขข้อมูล: ' + (Object.keys(EDIT_LBL).filter(function(k){ return k in o; }).map(function(k){ return EDIT_LBL[k]; }).join(', ') || '-'); }
 };
 var EDIT_LBL = {name:'ชื่อโปรเจกต์', details:'รายละเอียด', issue:'ปัญหา', label:'สถานที่', deadline:'กำหนดเสร็จ', images:'รูป'};
@@ -402,6 +413,7 @@ function projectCard(p, mine){
     h('p', {class:'small muted', text:'ความคืบหน้า ' + p.progress + '%'}),
     h('p', {class:'small'}, h('b', {text:'ผู้รับผิดชอบหลัก: '}), p.ownerName + (mine && !p.isCreator ? ' (โปรเจกต์ร่วม)' : '')),
     deadlineRow(p),
+    p.handover ? h('p', {class:'small warn', text:'กำลังโอนความรับผิดชอบหลักให้ ' + p.handover.toName + ' (รอยอมรับ)'}) : null,
     p.coOwners && p.coOwners.length ? h('p', {class:'small', text:'ผู้ร่วมรับผิดชอบ: ' + p.coOwners.map(coText).join(', ')}) : null,
     p.details ? h('p', {text:p.details}) : null,
     p.issue ? h('p', {class:'warn', text:'ปัญหา: ' + p.issue}) : null,
@@ -443,11 +455,19 @@ function managerView(){
   box.appendChild(tabBar([
     {key:'mine', label:'โปรเจกต์ของฉัน', count:0},
     {key:'msgs', label:'ข้อความจากเจ้าของบริษัท', count:needCount},
-    {key:'invites', label:'รอรับทราบ', count:S.invites.length},
+    {key:'invites', label:'รอรับทราบ', count:S.invites.length + S.handoverInvites.length},
     {key:'fix', label:'รอแก้ไข', count:returned.length}
   ], S.tabM, function(k){ S.tabM = k; render(); }));
   if(S.tabM === 'invites'){
-    if(!S.invites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
+    if(!S.invites.length && !S.handoverInvites.length) box.appendChild(h('p', {class:'muted', text:'ไม่มีโปรเจกต์ที่รอให้คุณรับทราบ'}));
+    S.handoverInvites.forEach(function(iv){
+      box.appendChild(h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
+        h('div', {}, h('p', {text:iv.by + ' ขอโอนความรับผิดชอบหลักของโปรเจกต์ "' + iv.name + '" ให้คุณ'}),
+          h('p', {class:'small muted', text:'ถ้ารับโอน คุณจะเป็นผู้รับผิดชอบหลักแทน ' + iv.ownerName + ' และมีสิทธิ์ลบโปรเจกต์และเพิ่ม/ถอนผู้ร่วมได้'})),
+        h('div', {class:'row'},
+          actBtn('รับโอน', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'handoverRespond', id:iv.id, accept:true}); }),
+          actBtn('ไม่รับ', 'sm', 'กำลังบันทึก...', function(){ return call({action:'handoverRespond', id:iv.id, accept:false}); })))));
+    });
     S.invites.forEach(function(iv){
       box.appendChild(h('div', {class:'card notice'}, h('div', {class:'row', style:'justify-content:space-between'},
         h('p', {text:iv.ownerName + ' ขอให้คุณร่วมรับผิดชอบโปรเจกต์ "' + iv.name + '"'}),
@@ -484,6 +504,28 @@ function managerView(){
     box.appendChild(h('div', {class:'cards'}, sorted.map(function(p){ return projectCard(p, true); })));
   }
   return box;
+}
+
+/* Hand over the main responsibility: used by the current owner (project form) and by the admin page.
+   Nothing changes until the chosen manager accepts. */
+function handoverBox(pid, pname, ownerName, pendingName, candidates, afterDone){
+  if(pendingName){
+    return h('div', {}, h('p', {class:'small warn', text:'รอ ' + pendingName + ' ยอมรับการโอน'}),
+      actBtn('ยกเลิกการโอน', 'sm', 'กำลังบันทึก...', async function(){ var j = await call({action:'handoverCancel', id:pid}); if(j.ok) afterDone(); return j; }));
+  }
+  var sel = h('select', {'aria-label':'ผู้รับโอนโปรเจกต์ ' + pname}, h('option', {value:'', text:'เลือกผู้รับโอน'}),
+    candidates.map(function(m){ return h('option', {value:m.id, text:m.name}); }));
+  var go = h('button', {class:'btn sm', type:'button', text:'ขอโอน'});
+  go.addEventListener('click', function(){
+    if(!sel.value){ toast('เลือกผู้รับโอนก่อน'); return; }
+    var nm = sel.options[sel.selectedIndex].text;
+    if(!confirm('ขอโอนโปรเจกต์ "' + pname + '" ให้ ' + nm + '?\nเมื่อ ' + nm + ' กดรับโอน ' + ownerName + ' จะไม่เห็นและแก้โปรเจกต์นี้อีก (เว้นแต่ถูกเชิญเป็นผู้ร่วม) และ ' + nm + ' จะมีสิทธิ์ลบโปรเจกต์ได้')) return;
+    withBusy(go, 'กำลังบันทึก...', async function(){
+      var j = await call({action:'handoverOffer', id:pid, to:sel.value});
+      if(j.ok){ afterDone(); toast('ส่งคำขอโอนแล้ว รอ ' + nm + ' ยอมรับ'); await refresh(); } else toast(errText(j, 'โอนไม่สำเร็จ'));
+    });
+  });
+  return h('div', {class:'row'}, sel, go);
 }
 
 function projectForm(p){
@@ -527,7 +569,8 @@ function projectForm(p){
         try{
           var b64 = await resize(list[i]);
           var j = await call({action:'upload', data:b64});
-          if(j.ok){ images.push(j.id); drawThumbs(); } else toast('อัปโหลดรูปไม่สำเร็จ');
+          // The API only serves images that belong to a saved project, so preview the new one from the local copy.
+          if(j.ok){ imgCache[j.id] = {d:'data:image/jpeg;base64,' + b64, t:Date.now()}; images.push(j.id); drawThumbs(); } else toast('อัปโหลดรูปไม่สำเร็จ');
         }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
       }
     });
@@ -567,6 +610,8 @@ function projectForm(p){
     !isNew && cur.isCreator && cur.ownerName !== S.name ? h('div', {class:'field'},
       h('p', {class:'small muted', text:'โปรเจกต์นี้ใช้ชื่อ "' + cur.ownerName + '" ถ้าตอนนี้คุณเป็นผู้ดูแลต่อ กดเพื่อเปลี่ยนเป็นชื่อ "' + S.name + '"'}),
       actBtn('โอนให้ชื่อปัจจุบัน', 'sm', 'กำลังบันทึก...', async function(){ var j = await call({action:'transfer', id:p.id}); if(j.ok) closeDlg(); return j; })) : null,
+    !isNew && cur.isCreator ? h('div', {class:'field'}, h('span', {class:'lbl', text:'โอนความรับผิดชอบหลักให้ผู้จัดการคนอื่น'}),
+      handoverBox(p.id, p.name, cur.ownerName, cur.handover ? cur.handover.toName : '', others, closeDlg)) : null,
     err,
     h('div', {class:'row'}, save, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}),
       !isNew && cur.isCreator ? (function(){
@@ -728,6 +773,14 @@ function adminView(){
     });
   });
   box.appendChild(h('div', {class:'card'}, h('h3', {text:'เพิ่มผู้จัดการ'}), h('div', {class:'row'}, nu, nn, add)));
+  var mgrs = S.people.filter(function(q){ return q.role === 'manager' && q.active; });
+  box.appendChild(h('div', {class:'card'}, h('h3', {text:'โอนผู้รับผิดชอบหลักของโปรเจกต์'}),
+    h('p', {class:'muted small', text:'ใช้เมื่อผู้รับผิดชอบหลักไม่อยู่แล้ว หรือต้องย้ายงาน ผู้รับโอนต้องกดรับโอนเองในหน้าของเขา เจ้าของเดิมจะไม่เห็นโปรเจกต์นี้อีกหลังรับโอน หน้านี้เห็นแค่ชื่อโปรเจกต์ ไม่เห็นรายละเอียด'}),
+    S.adminProjects.length ? S.adminProjects.map(function(pr){
+      return h('div', {class:'field', style:'border-top:1px solid var(--line);padding-top:10px'},
+        h('p', {}, h('b', {text:pr.name}), ' · ผู้รับผิดชอบหลัก: ' + pr.ownerName),
+        handoverBox(pr.id, pr.name, pr.ownerName, pr.handoverTo, mgrs.filter(function(m){ return m.id !== pr.ownerId; }), function(){}));
+    }) : h('p', {class:'muted', text:'ยังไม่มีโปรเจกต์'})));
   return box;
 }
 
