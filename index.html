@@ -877,6 +877,7 @@ function projectForm(p){
       if(!steps.length) steps.push({title:'', assignees:[cur.ownerId || S.id], due:'', needApproval:false});
       var people = assignees();
       kids.push(h('span', {class:'lbl', text:'ขั้นตอน (เรียงตามลำดับที่ต้องทำ)'}));
+      if(people.length === 1) kids.push(h('p', {class:'small muted', id:'f-steps-hint', text:'ตอนนี้เลือกได้แค่คุณ ถ้าจะให้คนอื่นรับผิดชอบขั้นตอน ให้ติ๊กชื่อในช่อง "ผู้รับผิดชอบร่วม" ด้านบนก่อน ชื่อจะขึ้นให้เลือกที่นี่ (เลือกได้เลย ไม่ต้องรอให้เขากดรับทราบ)'}));
       steps.forEach(function(x, i){
         var t = h('input', {type:'text', maxlength:120, placeholder:'ชื่อขั้นตอน', value:x.title, 'aria-label':'ชื่อขั้นที่ ' + (i + 1)});
         t.addEventListener('input', function(){ x.title = t.value; });
@@ -974,13 +975,13 @@ function projectForm(p){
     h('div', {class:'field'}, h('label', {for:'f-name', text:'ชื่อโปรเจกต์'}), name),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'สถานะ'}), radios),
     h('div', {class:'field'}, h('label', {for:'f-dl', text:'กำหนดเสร็จของโปรเจกต์'}), dl),
+    h('div', {class:'field'}, h('span', {class:'lbl', text:'ผู้รับผิดชอบร่วม'}), coField,
+      creator ? h('p', {class:'small muted', text:'ผู้ที่เลือกต้องกดรับทราบในหน้าของตัวเองก่อน จึงจะเป็นโปรเจกต์ร่วม'}) : h('p', {class:'small muted', text:'เฉพาะผู้สร้างโปรเจกต์เพิ่มหรือถอดผู้ร่วมได้'})),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'รูปแบบงาน'}), creator ? modeRadios : h('p', {class:'small', text:MODE[mode]}),
       creator ? h('p', {class:'small muted', text:'แบบขั้นตอน: แบ่งงานเป็นขั้น แต่ละขั้นมีคนรับผิดชอบและกำหนดเสร็จ · แบบส่งต่อ: ส่งงานต่อกันทีละคน พร้อมบอกว่าให้ทำอะไรและภายในวันไหน'}) : null),
     workBoxEl,
     h('div', {class:'field'}, h('label', {for:'f-det', text:'รายละเอียด'}), details),
     h('div', {class:'field'}, h('label', {for:'f-iss', text:'ปัญหา / ความเสี่ยง (ถ้ามี)'}), issue),
-    h('div', {class:'field'}, h('span', {class:'lbl', text:'ผู้รับผิดชอบร่วม'}), coField,
-      creator ? h('p', {class:'small muted', text:'ผู้ที่เลือกต้องกดรับทราบในหน้าของตัวเองก่อน จึงจะเป็นโปรเจกต์ร่วม'}) : h('p', {class:'small muted', text:'เฉพาะผู้สร้างโปรเจกต์เพิ่มหรือถอดผู้ร่วมได้'})),
     h('div', {class:'field'}, h('span', {class:'lbl', text:'รูปภาพ (ไม่เกิน ' + MAX_IMG + ' รูป)'}), thumbs, h('div', {class:'row'}, pick), files),
     h('div', {class:'field'}, h('label', {for:'f-loc', text:'สถานที่ (ไม่บังคับ)'}), label),
     reqRow,
