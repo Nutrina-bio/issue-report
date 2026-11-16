@@ -87,6 +87,7 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb .x{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1}
 .problem .cm{border-left-color:var(--late);background:var(--late-bg);border-radius:0 6px 6px 0;padding:6px 10px}
+.ask{flex-basis:100%;width:100%;border:1px solid var(--late);background:var(--late-bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 .files{display:flex;flex-wrap:wrap;gap:6px}
 #dlg.wide{width:min(960px,calc(100vw - 32px));max-width:none}
 .fpv{display:flex;flex-direction:column;gap:12px}
@@ -692,13 +693,28 @@ function commentEl(p, c){
     c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null,
     S.role === 'owner' ? delCommentBtn(c) : null);
 }
+/* Ask "are you sure?" inside the page, right after the button. The browser's own confirm() is not used:
+   some browsers (e.g. the browser pane in the Claude app) close it on their own, so the action never ran. */
+function askInline(anchor, msg, yesText, onYes){
+  var next = anchor.nextElementSibling;
+  if(next && next.classList.contains('ask')) return;
+  var yes = h('button', {class:'btn sm danger', type:'button', text:yesText});
+  var no = h('button', {class:'btn sm', type:'button', text:'ไม่ใช่'});
+  var box = h('div', {class:'ask', role:'alertdialog', 'aria-label':msg}, h('p', {class:'small', text:msg}), h('div', {class:'row'}, yes, no));
+  no.addEventListener('click', function(){ box.remove(); anchor.disabled = false; anchor.focus(); });
+  yes.addEventListener('click', function(){ onYes(yes); });
+  anchor.disabled = true;
+  anchor.insertAdjacentElement('afterend', box);
+  yes.focus();
+}
 function delCommentBtn(c){
   var b = h('button', {class:'btn sm danger', type:'button', text:'ลบคอมเมนต์', style:'align-self:flex-start'});
   b.addEventListener('click', function(){
-    if(!confirm('ลบคอมเมนต์นี้ถาวร? ข้อความจะหายไปจากหน้าของผู้จัดการทุกคน กู้คืนไม่ได้')) return;
-    withBusy(b, 'กำลังลบ...', async function(){
-      try{ var j = await call({action:'delComment', cid:c.cid}); if(j.ok){ toast('ลบคอมเมนต์แล้ว'); await refresh(); } else toast(errText(j, 'ลบไม่สำเร็จ')); }
-      catch(x){ toast('เชื่อมต่อไม่ได้ ลองอีกครั้ง'); }
+    askInline(b, 'ลบคอมเมนต์นี้ถาวร? ข้อความจะหายไปจากหน้าของผู้จัดการทุกคน กู้คืนไม่ได้', 'ยืนยันลบคอมเมนต์', function(yes){
+      withBusy(yes, 'กำลังลบ...', async function(){
+        try{ var j = await call({action:'delComment', cid:c.cid}); if(j.ok){ toast('ลบคอมเมนต์แล้ว'); await refresh(); } else toast(errText(j, 'ลบไม่สำเร็จ')); }
+        catch(x){ toast('เชื่อมต่อไม่ได้ ลองอีกครั้ง'); }
+      });
     });
   });
   return b;
@@ -1147,10 +1163,12 @@ function handoverBox(pid, pname, ownerName, pendingName, candidates, afterDone){
   go.addEventListener('click', function(){
     if(!sel.value){ toast('เลือกผู้รับโอนก่อน'); return; }
     var nm = sel.options[sel.selectedIndex].text;
-    if(!confirm('ขอโอนโปรเจกต์ "' + pname + '" ให้ ' + nm + '?\nเมื่อ ' + nm + ' กดรับโอน ' + ownerName + ' จะไม่เห็นและแก้โปรเจกต์นี้อีก (เว้นแต่ถูกเชิญเป็นผู้ร่วม) และ ' + nm + ' จะมีสิทธิ์ลบโปรเจกต์ได้')) return;
-    withBusy(go, 'กำลังบันทึก...', async function(){
-      var j = await call({action:'handoverOffer', id:pid, to:sel.value});
-      if(j.ok){ afterDone(); toast('ส่งคำขอโอนแล้ว รอ ' + nm + ' ยอมรับ'); await refresh(); } else toast(errText(j, 'โอนไม่สำเร็จ'));
+    var to = sel.value;
+    askInline(go, 'ขอโอนโปรเจกต์ "' + pname + '" ให้ ' + nm + '? เมื่อ ' + nm + ' กดรับโอน ' + ownerName + ' จะไม่เห็นและแก้โปรเจกต์นี้อีก (เว้นแต่ถูกเชิญเป็นผู้ร่วม) และ ' + nm + ' จะมีสิทธิ์ลบโปรเจกต์ได้', 'ยืนยันขอโอน', function(yes){
+      withBusy(yes, 'กำลังบันทึก...', async function(){
+        var j = await call({action:'handoverOffer', id:pid, to:to});
+        if(j.ok){ afterDone(); toast('ส่งคำขอโอนแล้ว รอ ' + nm + ' ยอมรับ'); await refresh(); } else toast(errText(j, 'โอนไม่สำเร็จ'));
+      });
     });
   });
   return h('div', {class:'row'}, sel, go);
@@ -1302,8 +1320,9 @@ function projectForm(p){
       !isNew && cur.isCreator ? (function(){
         var b = h('button', {class:'btn danger', type:'button', text:'ลบโปรเจกต์'});
         b.addEventListener('click', function(){
-          if(!confirm('ลบโปรเจกต์ "' + p.name + '" ถาวร? ประวัติและคอมเมนต์ของโปรเจกต์นี้จะหายไปด้วย กู้คืนไม่ได้')) return;
-          withBusy(b, 'กำลังลบ...', async function(){ var j = await call({action:'del', id:p.id}); if(j.ok){ closeDlg(); toast('ลบแล้ว'); await refresh(); } else toast(errText(j, 'ลบไม่สำเร็จ')); });
+          askInline(b, 'ลบโปรเจกต์ "' + p.name + '" ถาวร? ประวัติและคอมเมนต์ของโปรเจกต์นี้จะหายไปด้วย กู้คืนไม่ได้', 'ยืนยันลบถาวร', function(yes){
+            withBusy(yes, 'กำลังลบ...', async function(){ var j = await call({action:'del', id:p.id}); if(j.ok){ closeDlg(); toast('ลบแล้ว'); await refresh(); } else toast(errText(j, 'ลบไม่สำเร็จ')); });
+          });
         });
         return b;
       })() : null));
