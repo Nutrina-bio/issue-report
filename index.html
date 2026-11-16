@@ -451,6 +451,7 @@ function actBtn(label, cls, busyLabel, fn){
 /* ---------- shared project card ---------- */
 var EVT = {
   create:function(e){ return 'สร้างโปรเจกต์'; },
+  assign:function(e){ return 'เจ้าของบริษัทมอบให้ ' + e.note + ' เป็นผู้รับผิดชอบหลัก'; },
   status:function(e){ return ST[e.status] ? ST[e.status].label : (e.status === 'risk' ? 'มีความเสี่ยง (สถานะเดิม)' : e.status); },
   'approval-request':function(){ return 'ส่งขออนุมัติจากเจ้าของบริษัท'; },
   approved:function(){ return 'เจ้าของบริษัทอนุมัติ'; },
@@ -807,6 +808,7 @@ function detailBody(p, mine){
     p.loc ? h('a', {href:mapUrl(p.loc), target:'_blank', rel:'noopener', class:'small', text:'ดูแผนที่'}) : null,
     h('p', {class:'small muted'}, 'อัปเดต ' + fmt(p.updatedAt), stale ? h('span', {class:'warn', text:' · ไม่อัปเดตเกิน ' + STALE_DAYS + ' วัน'}) : null),
     mine && p.canEdit ? h('div', {class:'row'}, h('button', {class:'btn primary sm', type:'button', text:'แก้ไข', onclick:function(){ projectForm(p); }})) : null,
+    S.role === 'owner' ? h('div', {class:'row'}, h('button', {class:'btn sm', type:'button', text:'แก้กำหนดเสร็จ / รายละเอียด / ผู้รับผิดชอบหลัก', onclick:function(){ ownerProjectForm(p); }})) : null,
     h('h3', {text:'คอมเมนต์จากเจ้าของบริษัท' + (cs.length ? ' (' + cs.length + ')' : ''), style:'margin-top:8px'}),
     cs.length ? h('div', {class:'cms', style:'display:flex;flex-direction:column;gap:10px'}, cs.map(function(c){ return commentEl(p, c); })) : h('p', {class:'muted small', text:'ยังไม่มีคอมเมนต์'})
   ];
@@ -1338,6 +1340,42 @@ function projectForm(p){
 }
 
 /* ---------- owner ---------- */
+/* The company owner creates a project for a manager (p = null), or later changes its deadline, details or
+   main responsible person (the new one has to accept, like any hand-over). */
+function ownerProjectForm(p){
+  var d = $('#dlg'), isNew = !p, err = h('p', {class:'err', role:'alert'});
+  var name = h('input', {type:'text', id:'of-name', maxlength:120, placeholder:'เช่น ซ่อมเครื่องบรรจุขวดไลน์ 2'});
+  var who = h('select', {id:'of-who'}, h('option', {value:'', text:'เลือกผู้จัดการ'}), S.managers.map(function(m){ return h('option', {value:m.id, text:m.name}); }));
+  var dl = h('input', {type:'date', id:'of-dl', min:'2000-01-01', max:'2100-12-31', value:p ? p.deadline || '' : ''});
+  var det = h('textarea', {id:'of-det', maxlength:4000}); det.value = p ? p.details || '' : '';
+  var go = h('button', {class:'btn primary', type:'button', text:isNew ? 'สร้างโปรเจกต์' : 'บันทึก'});
+  go.addEventListener('click', function(){
+    err.textContent = '';
+    if(isNew && !name.value.trim()){ err.textContent = 'ใส่ชื่อโปรเจกต์'; return; }
+    if(isNew && !who.value){ err.textContent = 'เลือกผู้จัดการที่จะเป็นผู้รับผิดชอบหลัก'; return; }
+    if(!dl.value){ err.textContent = ERR.nodeadline; return; }
+    withBusy(go, 'กำลังบันทึก...', async function(){
+      try{
+        var j = await call(isNew ? {action:'ownerCreate', project:{name:name.value, assignTo:who.value, deadline:dl.value, details:det.value}}
+          : {action:'ownerEdit', id:p.id, details:det.value, deadline:dl.value});
+        if(j.ok){ closeDlg(); toast(isNew ? 'สร้างโปรเจกต์แล้ว' : 'บันทึกแล้ว'); await refresh(); } else err.textContent = errText(j, 'บันทึกไม่สำเร็จ');
+      }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
+    });
+  });
+  var others = S.managers.filter(function(m){ return p && m.id !== p.ownerId; });
+  d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'},
+    h('h2', {text:isNew ? 'สร้างโปรเจกต์ให้ผู้จัดการ' : 'แก้โปรเจกต์ "' + p.name + '"'}),
+    isNew ? h('div', {class:'field'}, h('label', {for:'of-name', text:'ชื่อโปรเจกต์'}), name) : null,
+    isNew ? h('div', {class:'field'}, h('label', {for:'of-who', text:'ผู้รับผิดชอบหลัก'}), who,
+      h('p', {class:'small muted', text:'ผู้จัดการคนนี้ดูแลโปรเจกต์ได้ทันที (เพิ่มผู้ร่วม ตั้งขั้นตอนหรือแจกใบงาน) โปรเจกต์นับว่าอนุมัติแล้ว'})) : null,
+    h('div', {class:'field'}, h('label', {for:'of-dl', text:'กำหนดเสร็จของโปรเจกต์'}), dl),
+    h('div', {class:'field'}, h('label', {for:'of-det', text:'รายละเอียด'}), det),
+    !isNew ? h('div', {class:'field'}, h('span', {class:'lbl', text:'เปลี่ยนผู้รับผิดชอบหลัก (ตอนนี้: ' + p.ownerName + ')'}),
+      h('p', {class:'small muted', text:'ผู้จัดการที่เลือกต้องกดรับโอนเองก่อนจึงจะมีผล'}),
+      handoverBox(p.id, p.name, p.ownerName, p.handover ? p.handover.toName : '', others, closeDlg)) : null,
+    err, h('div', {class:'row'}, go, h('button', {class:'btn', type:'button', text:'ยกเลิก', onclick:closeDlg}))));
+  d.showModal();
+}
 function ownerTools(p){
   var box = h('div', {style:'display:flex;flex-direction:column;gap:10px'});
   if(p.approval && p.approval.state === 'pending'){
@@ -1476,6 +1514,8 @@ function ownerView(al){
     return box;
   }
   var outer = box; box = h('div', {class:'col'});
+  box.appendChild(h('div', {class:'bar'}, h('h2', {text:'โปรเจกต์ทั้งหมด (' + all.length + ')'}),
+    h('button', {class:'btn primary', type:'button', text:'+ สร้างโปรเจกต์', onclick:function(){ ownerProjectForm(null); }})));
   function sideO(k){ return function(){ S.sideO = S.sideO === k ? '' : k; render(); }; }
   outer.appendChild(h('div', {class:'withside'}, sidePanel('สถานะงาน', [
     {label:'เกินกำหนด ' + ESCALATE_OWNER + ' วันขึ้นไป', n:al.late.length, cls:'late', go:goLate},
