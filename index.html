@@ -362,7 +362,9 @@ function commentEl(p, c){
   return h('div', {class:'cm' + (c.needsMyAck ? ' need' : '')},
     h('p', {class:'small muted', text:c.author + ' · ' + fmt(c.at)}),
     h('p', {text:c.text}),
-    h('p', {class:'small ' + (c.waiting.length ? 'warn' : 'ok'), text:(c.acks.length ? 'รับทราบแล้ว: ' + c.acks.map(function(a){ return a.name; }).join(', ') : 'ยังไม่มีผู้รับทราบ') + (c.waiting.length ? ' · รอ: ' + c.waiting.join(', ') : '')}),
+    c.images && c.images.length ? h('div', {class:'thumbs'}, c.images.map(function(id){ return thumbEl(id, false); })) : null,
+    h('p', {class:'small muted', text:c.to === 'all' || !c.to ? 'ถึง: ทุกคน (@ALL)' : c.to.length ? 'ถึง: ' + c.to.join(', ') : 'คอมเมนต์ทั่วไป ไม่ต้องรับทราบ'}),
+    c.to && c.to !== 'all' && !c.to.length ? null : h('p', {class:'small ' + (c.waiting.length ? 'warn' : 'ok'), text:(c.acks.length ? 'รับทราบแล้ว: ' + c.acks.map(function(a){ return a.name; }).join(', ') : 'ยังไม่มีผู้รับทราบ') + (c.waiting.length ? ' · รอ: ' + c.waiting.join(', ') : '')}),
     c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:c.cid}); }) : null,
     S.role === 'owner' ? delCommentBtn(c) : null);
 }
@@ -447,7 +449,7 @@ function managerView(){
   var DAY7 = 7;
   var msgs = [];
   S.projects.forEach(function(p){ (p.comments || []).forEach(function(c){
-    if(c.needsMyAck || ageDays(c.at) <= DAY7) msgs.push({p:p, c:c});
+    if(c.forMe !== false && (c.needsMyAck || ageDays(c.at) <= DAY7)) msgs.push({p:p, c:c});
   }); });
   msgs.sort(function(x, y){ return (y.c.needsMyAck ? 1 : 0) - (x.c.needsMyAck ? 1 : 0) || new Date(y.c.at) - new Date(x.c.at); });
   var needCount = msgs.filter(function(m){ return m.c.needsMyAck; }).length;
@@ -480,6 +482,7 @@ function managerView(){
     msgs.forEach(function(n){
       box.appendChild(h('div', {class:'card' + (n.c.needsMyAck ? ' notice' : ' dim')}, h('div', {class:'row', style:'justify-content:space-between'},
         h('div', {}, h('p', {class:'small muted', text:'โปรเจกต์ "' + n.p.name + '" · ' + fmt(n.c.at)}), h('p', {text:n.c.text}),
+          n.c.images && n.c.images.length ? h('div', {class:'thumbs'}, n.c.images.map(function(id){ return thumbEl(id, false); })) : null,
           n.c.needsMyAck ? null : h('p', {class:'small ok', text:'คุณรับทราบแล้ว'})),
         n.c.needsMyAck ? actBtn('รับทราบ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'ack', cid:n.c.cid}); }) : null)));
     });
@@ -633,16 +636,57 @@ function ownerTools(p){
       actBtn('อนุมัติ', 'sm primary', 'กำลังบันทึก...', function(){ return call({action:'approve', id:p.id}); }),
       h('button', {class:'btn sm', text:'ส่งกลับให้แก้', onclick:function(){ returnDialog(p); }})));
   }
-  var ta = h('textarea', {maxlength:1000, placeholder:'เขียนคอมเมนต์ถึงผู้จัดการโปรเจกต์นี้', 'aria-label':'คอมเมนต์', style:'min-height:64px'});
+  var ta = h('textarea', {maxlength:1000, placeholder:'เขียนคอมเมนต์ถึงผู้จัดการโปรเจกต์นี้ ใส่ @ชื่อ หรือ @ALL ถ้าต้องการให้กดรับทราบ', 'aria-label':'คอมเมนต์', style:'min-height:64px'});
+  // People who can be @mentioned: the main responsible person and accepted co-owners.
+  var people = [{id:p.ownerId, name:(S.managers.filter(function(m){ return m.id === p.ownerId; })[0] || {}).name || p.ownerName}]
+    .concat((p.coOwners || []).filter(function(c){ return c.state === 'accepted'; }).map(function(c){ return {id:c.id, name:c.name}; }));
+  function insert(tag){
+    var a = ta.selectionStart, b = ta.selectionEnd, v = ta.value, pre = a > 0 && v.charAt(a - 1).trim() !== '' ? ' ' : '';
+    ta.value = v.slice(0, a) + pre + tag + ' ' + v.slice(b);
+    var pos = a + pre.length + tag.length + 1; ta.focus(); ta.setSelectionRange(pos, pos);
+  }
+  var chips = h('div', {class:'row', 'aria-label':'แท็กผู้รับ'},
+    h('button', {class:'btn sm', type:'button', text:'@ALL', onclick:function(){ insert('@ALL'); }}),
+    people.map(function(m){ return h('button', {class:'btn sm', type:'button', text:'@' + m.name, onclick:function(){ insert('@' + m.name); }}); }));
+  // Longest names first, so "@สมชาย ใหม่" is not also read as "@สมชาย".
+  function targetsOf(text){
+    if(/@all(?![a-z0-9])/i.test(text)) return 'all';
+    var rest = text, ids = [];
+    people.slice().sort(function(x, y){ return y.name.length - x.name.length; }).forEach(function(m){
+      var tag = '@' + m.name;
+      if(rest.indexOf(tag) >= 0){ ids.push(m.id); rest = rest.split(tag).join(' '); }
+    });
+    return ids; // [] = no tag: a plain comment, nobody has to acknowledge
+  }
+  var cimgs = [], thumbs = h('div', {class:'thumbs'});
+  function drawThumbs(){ thumbs.replaceChildren.apply(thumbs, cimgs.map(function(id, i){ return thumbEl(id, true, function(){ cimgs.splice(i, 1); drawThumbs(); }); })); }
+  var files = h('input', {type:'file', accept:'image/*', multiple:true, hidden:true});
+  var pick = h('button', {class:'btn sm', type:'button', text:'แนบรูป'});
+  pick.addEventListener('click', function(){ files.click(); });
+  files.addEventListener('change', function(){
+    var list = Array.prototype.slice.call(files.files); files.value = '';
+    withBusy(pick, 'กำลังอัปโหลด...', async function(){
+      for(var i = 0; i < list.length; i++){
+        if(cimgs.length >= MAX_IMG){ toast('แนบรูปได้ไม่เกิน ' + MAX_IMG + ' รูป'); break; }
+        try{
+          var b64 = await resize(list[i]);
+          var j = await call({action:'upload', data:b64});
+          if(j.ok){ imgCache[j.id] = {d:'data:image/jpeg;base64,' + b64, t:Date.now()}; cimgs.push(j.id); drawThumbs(); } else toast('อัปโหลดรูปไม่สำเร็จ');
+        }catch(x){ toast('อัปโหลดรูปไม่สำเร็จ'); }
+      }
+    });
+  });
   var send = h('button', {class:'btn sm', type:'button', text:'ส่งคอมเมนต์'});
   send.addEventListener('click', function(){
     if(!ta.value.trim()){ toast('พิมพ์คอมเมนต์ก่อน'); return; }
+    var to = targetsOf(ta.value);
     withBusy(send, 'กำลังส่ง...', async function(){
-      try{ var j = await call({action:'addComment', id:p.id, text:ta.value}); if(j.ok){ toast('ส่งคอมเมนต์แล้ว'); await refresh(); } else toast(errText(j, 'ส่งไม่สำเร็จ')); }
+      try{ var j = await call({action:'addComment', id:p.id, text:ta.value, to:to, images:cimgs}); if(j.ok){ toast('ส่งคอมเมนต์แล้ว'); await refresh(); } else toast(errText(j, 'ส่งไม่สำเร็จ')); }
       catch(x){ toast('เชื่อมต่อไม่ได้ ลองอีกครั้ง'); }
     });
   });
-  box.appendChild(h('div', {class:'field'}, ta, h('div', {class:'row'}, send, h('span', {class:'small muted', text:'ส่งแล้วแก้ไขไม่ได้ (ลบได้)'}))));
+  box.appendChild(h('div', {class:'field'}, chips, ta, thumbs, files,
+    h('div', {class:'row'}, send, pick, h('span', {class:'small muted', text:'ไม่ใส่ @ = คอมเมนต์ทั่วไป ไม่ต้องรับทราบ · ส่งแล้วแก้ไขไม่ได้ (ลบได้)'}))));
   return box;
 }
 function returnDialog(p){
