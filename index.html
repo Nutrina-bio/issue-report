@@ -32,6 +32,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--body
 h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;font-weight:600;letter-spacing:-.005em}
 h1{font-size:1.45rem;line-height:1.25}h2{font-size:1.12rem}h3{font-size:1rem}
 p{margin:0}.muted{color:var(--muted)}.small{font-size:.85rem}
+.greet{font-size:.95rem;margin-top:2px}
+.enter .greet{animation:rise .5s var(--ease) both .1s}
 .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow)}
 .card.notice{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
@@ -456,7 +458,7 @@ function render(){
   var fresh = view !== lastView; lastView = view;
   if(!S.token){ app.appendChild(loginView()); return; }
   app.appendChild(h('div', {class:'bar'},
-    h('div', {}, h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted small', text:S.role === 'owner' ? 'เจ้าของบริษัท' : S.name + ' · ' + (ROLE[S.role] || '')})),
+    h('div', {}, h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted greet', text:'สวัสดี คุณ' + (S.name || '') + ' ขอให้เป็นวันที่ดี'})),
     h('div', {class:'row'},
       S.role !== 'admin' ? (function(){ var b = h('button', {class:'btn', text:'รีเฟรช'}); b.addEventListener('click', function(){ withBusy(b, 'กำลังโหลด...', refresh); }); return b; })() : null,
       h('button', {class:'btn', text:'ออกจากระบบ', onclick:function(){ call({action:'logout'}).catch(function(){}); logoutLocal(); }}))));
