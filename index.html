@@ -207,7 +207,7 @@ var ST = {
 var ORDER = ['delayed','inprogress','done'];
 var STALE_DAYS = 7, MAX_IMG = 4;
 var ROLE = {manager:'ผู้จัดการโปรเจกต์', owner:'เจ้าของบริษัท', admin:'ผู้ดูแลระบบ'};
-var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', noreport:'เขียนสรุปงานที่ทำไปแล้วก่อน',filetype:'แนบได้เฉพาะไฟล์ PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP, JPG, PNG',filesize:'ไฟล์ต้องไม่เกิน 4 MB', noreason:'ต้องใส่เหตุผล', badtask:'ใบงานต้องมีคนทำ งาน และวันที่', taskdue:'วันที่ของใบงานต้องไม่เกินกำหนดเสร็จของโปรเจกต์ (มีใบงานที่ยังเปิดอยู่เลยวันนั้น)', needapproval:'ใบงานนี้ต้องให้เจ้าของบริษัทอนุมัติก่อน', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
+var ERR = {dup:'ชื่อผู้ใช้นี้มีอยู่แล้ว', badid:'ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็กและตัวเลข ยาว 3–20 ตัว', missing:'กรอกข้อมูลไม่ครบ', short:'รหัสสั้นเกินไป (อย่างน้อย 6 ตัว)', state:'สถานะเปลี่ยนไปแล้ว รีเฟรชดู', role:'ไม่มีสิทธิ์ทำรายการนี้', notfound:'ไม่พบรายการ', nodeadline:'ต้องใส่กำหนดเสร็จของโปรเจกต์', noreport:'เขียนสรุปงานที่ทำไปแล้วก่อน',filetype:'แนบได้เฉพาะไฟล์ PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP, JPG, PNG',filesize:'ไฟล์ต้องไม่เกิน 4 MB', noreason:'ต้องใส่เหตุผล', badtask:'ใบงานต้องมีคนทำ งาน และวันที่', taskdue:'วันที่ของใบงานต้องไม่เกินกำหนดเสร็จของโปรเจกต์ (มีใบงานที่ยังเปิดอยู่เลยวันนั้น)', needapproval:'ใบงานนี้ต้องให้เจ้าของบริษัทอนุมัติก่อน', nosteps:'ต้องมีอย่างน้อย 1 ขั้นตอน', badstep:'ทุกขั้นตอนต้องมีชื่อ ผู้รับผิดชอบ และกำหนดเสร็จ', stepdue:'กำหนดเสร็จของขั้นตอนที่ยังไม่เสร็จต้องไม่เกินกำหนดเสร็จของโปรเจกต์',stepsopen:'แบบขั้นตอนจะเป็น "เสร็จสิ้น" เองเมื่อทุกขั้นเสร็จ ยังมีขั้นที่ไม่เสร็จ เลือกสถานะอื่นก่อน', badturn:'ต้องใส่กำหนดเสร็จของตา', turndue:'กำหนดเสร็จของตาต้องไม่เกินกำหนดเสร็จของโปรเจกต์', badtarget:'โอนให้คนนี้ไม่ได้ (ต้องเป็นผู้จัดการที่ยังใช้งานอยู่ และไม่ใช่เจ้าของปัจจุบัน)'};
 var S = {tabM:'mine', subM:'all', tabO:'all', open:{}, token:null, id:null, name:null, role:null, projects:[], invites:[], handoverInvites:[], adminProjects:[], managers:[], people:[], filterStatus:'', filterMgr:'', filterLate:false, sideM:'', sideO:''};
 var imgCache = {}, imgQueue = [], imgActive = 0;
 
@@ -1411,6 +1411,7 @@ function projectForm(p){
     if(mode === 'steps' && creator){
       if(steps.some(function(x){ return !x.title.trim() || !x.due || !x.assignees.length; })){ err.textContent = ERR.badstep; return; }
       if(steps.some(function(x){ return !x.doneAt && x.due > dl.value; })){ err.textContent = ERR.stepdue; return; }
+      if(st === 'done' && steps.some(function(x){ return !x.doneAt; })){ err.textContent = ERR.stepsopen; return; }
     }
 
     withBusy(save, 'กำลังบันทึก...', async function(){
