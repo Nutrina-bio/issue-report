@@ -433,6 +433,71 @@ function resize(file){
 }
 
 /* ---------- render ---------- */
+/* ---------- phone notifications (Web Push through sw.js) ---------- */
+var PUSH_OK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && (location.protocol === 'https:' || location.hostname === 'localhost');
+function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function standalone(){ try{ return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; }catch(e){ return false; } }
+function b64key(s){ var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+async function pushReg(){ return PUSH_OK ? (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register('sw.js')) : null; }
+async function pushSub(){ var r = await pushReg(); return r ? await r.pushManager.getSubscription() : null; }
+/* turn this device off; quiet = during logout (no toast) */
+async function pushOff(quiet){
+  try{ var sub = await pushSub(); if(!sub) return;
+    await call({action:'pushUnsubscribe', endpoint:sub.endpoint}).catch(function(){}); await sub.unsubscribe();
+    if(!quiet) toast('ปิดการแจ้งเตือนบนเครื่องนี้แล้ว');
+  }catch(e){}
+}
+async function pushOn(){
+  var k = await call({action:'pushKey'});
+  if(!k.ok || !k.key) throw new Error('nokey');
+  if(Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new Error('denied');
+  var r = await pushReg(); await navigator.serviceWorker.ready;
+  var sub = (await r.pushManager.getSubscription()) || (await r.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64key(k.key)}));
+  var j = await call({action:'pushSubscribe', sub:sub.toJSON()});
+  if(!j.ok) throw new Error(j.error || 'save');
+}
+function pushDialog(){
+  var d = $('#dlg'), box = h('div', {class:'push-body', style:'display:flex;flex-direction:column;gap:10px'}, h('p', {class:'muted', text:'กำลังตรวจสอบ...'}));
+  d.replaceChildren(h('div', {style:'display:flex;flex-direction:column;gap:12px'}, h('h2', {text:'🔔 การแจ้งเตือนบนโทรศัพท์'}),
+    h('p', {class:'small muted', text:'แจ้งเมื่อมีงานถึงตาคุณ เจ้าของบริษัทมอบ/แก้โปรเจกต์หรือ @ถึงคุณ มีงานรออนุมัติหรือผลอนุมัติ มีคนแจ้งปัญหา และสรุปงานค้างทุกเช้า 09.00 · ตั้งค่าแยกทีละเครื่อง'}),
+    box, h('div', {class:'row'}, h('button', {class:'btn', type:'button', text:'ปิดหน้าต่าง', onclick:closeDlg}))));
+  d.showModal();
+  (async function draw(){
+    var rows = [];
+    if(!PUSH_OK) rows.push(h('p', {text:isIOS() && !standalone() ? 'บน iPhone/iPad ต้องเพิ่มแอปลงหน้าจอโฮมก่อน (Safari → ปุ่มแชร์ → เพิ่มไปยังหน้าจอโฮม) แล้วเปิดจากไอคอนนั้น และต้องเป็น iOS 16.4 ขึ้นไป' : 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน ลองเปิดด้วย Chrome หรือติดตั้งเป็นแอป'}));
+    else if(Notification.permission === 'denied') rows.push(h('p', {text:'เครื่องนี้ปิดการแจ้งเตือนของแอปนี้ไว้ ต้องไปเปิดในการตั้งค่าของเบราว์เซอร์หรือของโทรศัพท์ก่อน'}));
+    else {
+      var sub = null; try{ sub = await pushSub(); }catch(e){}
+      var on = h('button', {class:'btn primary', type:'button', text:'เปิดการแจ้งเตือนบนเครื่องนี้'});
+      on.addEventListener('click', function(){ withBusy(on, 'กำลังเปิด...', async function(){
+        try{ await pushOn(); toast('เปิดการแจ้งเตือนแล้ว'); draw(); }
+        catch(e){ toast(e.message === 'nokey' ? 'ระบบยังไม่ได้ตั้งค่าการแจ้งเตือน (ติดต่อผู้ดูแลระบบ)' : e.message === 'denied' ? 'ไม่ได้อนุญาตการแจ้งเตือน' : 'เปิดการแจ้งเตือนไม่สำเร็จ'); }
+      }); });
+      var test = h('button', {class:'btn', type:'button', text:'ส่งข้อความทดสอบ'});
+      test.addEventListener('click', function(){ withBusy(test, 'กำลังส่ง...', async function(){ var j = await call({action:'pushTest'}); toast(j.ok ? 'ส่งแล้ว ' + j.devices + ' เครื่อง ถ้าไม่เด้งภายในไม่กี่วินาที ให้เช็คการตั้งค่าแจ้งเตือนของโทรศัพท์' : 'ส่งไม่สำเร็จ'); }); });
+      var off = h('button', {class:'btn danger', type:'button', text:'ปิดบนเครื่องนี้'});
+      off.addEventListener('click', function(){ withBusy(off, 'กำลังปิด...', async function(){ await pushOff(false); draw(); }); });
+      rows.push(sub ? h('p', {class:'ok', text:'✔ เครื่องนี้เปิดการแจ้งเตือนอยู่'}) : h('p', {text:'เครื่องนี้ยังไม่ได้เปิดการแจ้งเตือน'}));
+      rows.push(h('div', {class:'row'}, sub ? [test, off] : on));
+    }
+    box.replaceChildren.apply(box, rows);
+  })();
+}
+/* a tapped notification opens ?p=<project id> */
+function openFromUrl(){
+  var u = new URL(location.href), id = u.searchParams.get('p');
+  if(!id || !S.token) return;
+  u.searchParams.delete('p'); history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+  if((S.projects || []).some(function(p){ return p.id === id; })) openDetail(id, S.role !== 'owner');
+}
+if(PUSH_OK){
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+  navigator.serviceWorker.addEventListener('message', function(e){
+    if(!e.data || !e.data.open) return;
+    history.replaceState(null, '', e.data.open);
+    if(S.token) refresh().then(openFromUrl);
+  });
+}
 var REDUCED = false; try{ REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
 /* numbers in the side panel and the owner's tiles count up from 0 when a view first shows */
 function countUp(root){
@@ -460,8 +525,9 @@ function render(){
   app.appendChild(h('div', {class:'bar'},
     h('div', {}, h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted greet', text:'สวัสดี คุณ' + (S.name || '') + ' ขอให้เป็นวันที่ดี'})),
     h('div', {class:'row'},
+      S.role !== 'admin' ? h('button', {class:'btn', type:'button', text:'🔔', title:'การแจ้งเตือนบนโทรศัพท์', 'aria-label':'การแจ้งเตือนบนโทรศัพท์', onclick:pushDialog}) : null,
       S.role !== 'admin' ? (function(){ var b = h('button', {class:'btn', text:'รีเฟรช'}); b.addEventListener('click', function(){ withBusy(b, 'กำลังโหลด...', refresh); }); return b; })() : null,
-      h('button', {class:'btn', text:'ออกจากระบบ', onclick:function(){ call({action:'logout'}).catch(function(){}); logoutLocal(); }}))));
+      h('button', {class:'btn', text:'ออกจากระบบ', onclick:async function(){ await pushOff(true); call({action:'logout'}).catch(function(){}); logoutLocal(); }}))));
   if(S.role === 'admin') app.appendChild(adminView());
   else {
     var al = workAlerts(), bar = alertBar(al);
@@ -484,7 +550,7 @@ function loginView(){
       try{
         var j = await call({action:'login', username:user.value.trim(), pass:pw.input.value});
         if(j.ok){ S.token = j.token; S.id = j.id; S.name = j.name; S.role = j.role; saveSession(); await refresh();
-          if(S.role !== 'admin') alertsPopup(workAlerts()); } // once per login, when there is overdue work
+          if(S.role !== 'admin'){ alertsPopup(workAlerts()); if(!$('#dlg').open) openFromUrl(); } } // once per login, when there is overdue work
         else err.textContent = j.error === 'locked' ? 'ใส่รหัสผิดหลายครั้ง ลองใหม่ใน 15 นาที' : 'ชื่อผู้ใช้หรือรหัสไม่ถูกต้อง';
       }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
     });
@@ -1731,7 +1797,7 @@ function adminView(){
 (function(){
   try{
     var s = JSON.parse(sessionStorage.getItem('ps-s') || 'null');
-    if(s && s.token){ S.token = s.token; S.id = s.id; S.name = s.name; S.role = s.role; if(S.role !== 'admin') skeleton(); refresh(); return; }
+    if(s && s.token){ S.token = s.token; S.id = s.id; S.name = s.name; S.role = s.role; if(S.role !== 'admin') skeleton(); refresh().then(openFromUrl); return; }
   }catch(e){}
   render();
 })();
