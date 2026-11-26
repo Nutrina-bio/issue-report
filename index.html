@@ -272,8 +272,10 @@ async function call(body){
   if(!j.ok && j.error === 'auth' && body.action !== 'login'){ logoutLocal(); toast('หมดเวลาการเข้าสู่ระบบ หรือบัญชีถูกเปลี่ยน กรุณาเข้าใหม่'); }
   return j;
 }
-function saveSession(){ try{ sessionStorage.setItem('ps-s', JSON.stringify({token:S.token, id:S.id, name:S.name, role:S.role})); }catch(e){} }
-function logoutLocal(){ var pd = $('#pd'); if(pd && pd.open) pd.close(); S.tabM = 'mine'; S.tabO = 'all'; S.subM = 'all'; S.sideM = ''; S.sideO = ''; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; try{ sessionStorage.removeItem('ps-s'); }catch(e){} render(); }
+/* "remember me" sessions survive closing the app (localStorage); others end with the tab or app (sessionStorage) */
+function saveSession(){ try{ var v = JSON.stringify({token:S.token, id:S.id, name:S.name, role:S.role, remember:!!S.remember});
+  if(S.remember){ localStorage.setItem('ps-s', v); sessionStorage.removeItem('ps-s'); } else { sessionStorage.setItem('ps-s', v); localStorage.removeItem('ps-s'); } }catch(e){} }
+function logoutLocal(){ var pd = $('#pd'); if(pd && pd.open) pd.close(); S.tabM = 'mine'; S.tabO = 'all'; S.subM = 'all'; S.sideM = ''; S.sideO = ''; S.open = {}; S.token = null; S.id = null; S.name = null; S.role = null; S.remember = false; try{ sessionStorage.removeItem('ps-s'); localStorage.removeItem('ps-s'); }catch(e){} render(); }
 function closeDlg(){ var d = $('#dlg'); if(d.open) d.close(); }
 function pdClosed(){ S.pd = null; $('#pd').replaceChildren(); }
 $('#pd').addEventListener('close', pdClosed);
@@ -543,13 +545,15 @@ function loginView(){
   cleanId(user);
   var pw = pwField({id:'lp', autocomplete:'current-password'});
   var err = h('p', {class:'err', role:'alert'});
+  // ticked by default in the installed app (a personal phone), not in a plain browser tab (may be shared)
+  var keep = h('input', {type:'checkbox', id:'lr'}); keep.checked = standalone();
   var btn = h('button', {class:'btn primary', type:'submit', text:'เข้าสู่ระบบ'});
   var f = h('form', {class:'card login', onsubmit:function(e){
     e.preventDefault(); err.textContent = '';
     withBusy(btn, 'กำลังเข้าสู่ระบบ...', async function(){
       try{
-        var j = await call({action:'login', username:user.value.trim(), pass:pw.input.value});
-        if(j.ok){ S.token = j.token; S.id = j.id; S.name = j.name; S.role = j.role; saveSession(); await refresh();
+        var j = await call({action:'login', username:user.value.trim(), pass:pw.input.value, remember:keep.checked});
+        if(j.ok){ S.token = j.token; S.id = j.id; S.name = j.name; S.role = j.role; S.remember = !!j.remember; saveSession(); await refresh();
           if(S.role !== 'admin'){ alertsPopup(workAlerts()); if(!$('#dlg').open) openFromUrl(); } } // once per login, when there is overdue work
         else err.textContent = j.error === 'locked' ? 'ใส่รหัสผิดหลายครั้ง ลองใหม่ใน 15 นาที' : 'ชื่อผู้ใช้หรือรหัสไม่ถูกต้อง';
       }catch(x){ err.textContent = 'เชื่อมต่อไม่ได้ ลองอีกครั้ง'; }
@@ -557,7 +561,9 @@ function loginView(){
   }},
     h('h1', {text:'รายงานสถานะโปรเจกต์'}), h('p', {class:'muted', text:'เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสของคุณ'}),
     h('div', {class:'field'}, h('label', {for:'ln', text:'ชื่อผู้ใช้ (ภาษาอังกฤษ)'}), user),
-    h('div', {class:'field'}, h('label', {for:'lp', text:'รหัส'}), pw.el), err, btn);
+    h('div', {class:'field'}, h('label', {for:'lp', text:'รหัส'}), pw.el),
+    h('label', {class:'row', style:'font-weight:400;gap:8px'}, keep, 'จำฉันไว้ในเครื่องนี้ 30 วัน'),
+    h('p', {class:'small muted', text:'ไม่ต้องติ๊กถ้าเป็นเครื่องที่ใช้ร่วมกับคนอื่น'}), err, btn);
   return f;
 }
 
@@ -1796,8 +1802,8 @@ function adminView(){
 /* ---------- start ---------- */
 (function(){
   try{
-    var s = JSON.parse(sessionStorage.getItem('ps-s') || 'null');
-    if(s && s.token){ S.token = s.token; S.id = s.id; S.name = s.name; S.role = s.role; if(S.role !== 'admin') skeleton(); refresh().then(openFromUrl); return; }
+    var s = JSON.parse(sessionStorage.getItem('ps-s') || localStorage.getItem('ps-s') || 'null');
+    if(s && s.token){ S.token = s.token; S.id = s.id; S.name = s.name; S.role = s.role; S.remember = !!s.remember; if(S.role !== 'admin') skeleton(); refresh().then(openFromUrl); return; }
   }catch(e){}
   render();
 })();
